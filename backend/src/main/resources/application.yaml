@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: sistema-mr
+    
+  
+  ai:
+    google:
+      genai:
+        api-key: ${GEMINI_API_KEY}
+        embedding:
+          api-key: ${GEMINI_API_KEY}
+
+  neo4j:
+    uri: ${NEO4J_URI}
+    authentication:
+      username: neo4j
+      password: ${PASSWD_NEO4J}

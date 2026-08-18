@@ -1,0 +1,134 @@
+.chat-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 90vh;
+  max-width: 900px;
+  margin: 0 auto;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  font-family: monospace, sans-serif;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background-color: #252526;
+  border-bottom: 1px solid #333;
+
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+  }
+}
+
+.session-badge {
+  background: #333;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.btn-refresh {
+  background: transparent;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+
+  &:hover {
+    background: #333;
+  }
+}
+
+.chat-history {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #777;
+  margin-top: 40px;
+}
+
+.chat-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  line-height: 1.4;
+
+  &.user {
+    align-self: flex-end;
+    background-color: #0e639c;
+    color: #ffffff;
+  }
+
+  &.assistant {
+    align-self: flex-start;
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+  }
+
+  &.loading {
+    color: #aaa;
+    font-style: italic;
+  }
+}
+
+.bubble-header {
+  font-size: 0.75rem;
+  margin-bottom: 4px;
+  opacity: 0.8;
+}
+
+.bubble-content pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
+.chat-input-area {
+  display: flex;
+  padding: 12px;
+  background-color: #252526;
+  border-top: 1px solid #333;
+  gap: 10px;
+
+  textarea {
+    flex: 1;
+    background: #1e1e1e;
+    border: 1px solid #404040;
+    color: #fff;
+    padding: 8px;
+    border-radius: 4px;
+    resize: none;
+    height: 40px;
+    font-family: inherit;
+  }
+
+  button {
+    background: #0e639c;
+    color: white;
+    border: none;
+    padding: 0 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+
+    &:disabled {
+      background: #444;
+      cursor: not-allowed;
+    }
+  }
+}
+

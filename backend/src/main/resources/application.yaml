@@ -4,14 +4,42 @@ spring:
     
   
   ai:
+    vectorstore:
+      neo4j:
+        database-name: neo4j
+        index-name: chat-memory-index
+        uri: ${NEO4J_URI}
+        username: neo4j
+        password: ${PASSWD_NEO4J}
+    
     google:
       genai:
         api-key: ${GEMINI_API_KEY}
         embedding:
           api-key: ${GEMINI_API_KEY}
+        chat:
+          model: gemini-3.7-flash
+          temperature: 0.3
+          google-search-retrieval: true
+          include-thoughts: false
+          thinking-level: LOW
 
   neo4j:
     uri: ${NEO4J_URI}
     authentication:
       username: neo4j
       password: ${PASSWD_NEO4J}
+      
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info"
+  endpoint:
+    health:
+      show-details: always
+  health:
+    neo4j:
+      enabled: true
+    defaults:
+      enabled: true

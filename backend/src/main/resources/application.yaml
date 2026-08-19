@@ -8,9 +8,6 @@ spring:
       neo4j:
         database-name: neo4j
         index-name: chat-memory-index
-        uri: ${NEO4J_URI}
-        username: neo4j
-        password: ${PASSWD_NEO4J}
     
     google:
       genai:
@@ -18,28 +15,36 @@ spring:
         embedding:
           api-key: ${GEMINI_API_KEY}
         chat:
-          model: gemini-3.7-flash
+          model: gemini-3.6-flash
           temperature: 0.3
-          google-search-retrieval: true
+          google-search-retrieval: false
           include-thoughts: false
           thinking-level: LOW
-
+    
+    chat:
+      memory:
+        repository:
+          neo4j:
+            session-label: ChatSession
+            message-label: ChatMessage
   neo4j:
     uri: ${NEO4J_URI}
     authentication:
       username: neo4j
       password: ${PASSWD_NEO4J}
       
-management:
-  endpoints:
-    web:
-      exposure:
-        include: "health,info"
-  endpoint:
-    health:
-      show-details: always
-  health:
-    neo4j:
-      enabled: true
-    defaults:
-      enabled: true
+logging:
+  level:
+    org:
+      springframework:
+        # Ativa o log de DEBUG para todo o ecossistema Spring AI
+        ai: DEBUG
+    
+        # Se quiser ver as chamadas HTTP brutas / clientes GenAI / WebClient:
+        web:
+          client:
+            RestTemplate: DEBUG
+          reactive:
+            function:
+                client:
+                    WebClient: DEBUG

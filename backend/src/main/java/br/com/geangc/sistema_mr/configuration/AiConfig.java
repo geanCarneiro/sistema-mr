@@ -5,12 +5,19 @@
 package br.com.geangc.sistema_mr.configuration;
 
 import br.com.geangc.sistema_mr.tool_calling.PythonToolConfig;
+import jakarta.annotation.PostConstruct;
+import org.neo4j.driver.Driver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.neo4j.Neo4jChatMemoryRepository;
+import org.springframework.ai.chat.memory.repository.neo4j.Neo4jChatMemoryRepositoryConfig;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -20,14 +27,30 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class AiConfig {
-        
+
     @Bean
-    public ChatMemory chatMemory(Neo4jChatMemoryRepository neo4jChatMemoryRepository) {
+    public ChatMemoryRepository chatMemoryRepository(Driver driver) {
+        Neo4jChatMemoryRepositoryConfig config = Neo4jChatMemoryRepositoryConfig.builder()
+                .withDriver(driver)
+                .withSessionLabel("ChatSession")
+                .withMessageLabel("ChatMessage")
+                .build();
+
+        Neo4jChatMemoryRepository targetRepository = new Neo4jChatMemoryRepository(config);
+        
+        // Retorna o Decorator que limpa os metadados do Gemini antes de salvar no Neo4j
+        return new SanitizedNeo4jChatMemoryRepository(targetRepository);
+    }
+    
+    @Bean
+    public ChatMemory chatMemory(ChatMemoryRepository repository) {
+                
         return MessageWindowChatMemory.builder()
-                .chatMemoryRepository(neo4jChatMemoryRepository)
+                .chatMemoryRepository(repository)
                 .maxMessages(20)
                 .build();
     }
+    
     
     @Bean
     public ChatClient chatClient(

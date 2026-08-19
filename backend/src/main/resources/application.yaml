@@ -15,36 +15,15 @@ spring:
         embedding:
           api-key: ${GEMINI_API_KEY}
         chat:
-          model: gemini-3.6-flash
+          model: gemini-3.1-flash-lite
           temperature: 0.3
           google-search-retrieval: false
           include-thoughts: false
           thinking-level: LOW
-    
-    chat:
-      memory:
-        repository:
-          neo4j:
-            session-label: ChatSession
-            message-label: ChatMessage
+   
   neo4j:
     uri: ${NEO4J_URI}
     authentication:
       username: neo4j
       password: ${PASSWD_NEO4J}
-      
-logging:
-  level:
-    org:
-      springframework:
-        # Ativa o log de DEBUG para todo o ecossistema Spring AI
-        ai: DEBUG
-    
-        # Se quiser ver as chamadas HTTP brutas / clientes GenAI / WebClient:
-        web:
-          client:
-            RestTemplate: DEBUG
-          reactive:
-            function:
-                client:
-                    WebClient: DEBUG
+  

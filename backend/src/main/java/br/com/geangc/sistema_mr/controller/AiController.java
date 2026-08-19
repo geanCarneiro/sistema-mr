@@ -4,12 +4,13 @@
  */
 package br.com.geangc.sistema_mr.controller;
 
+import br.com.geangc.sistema_mr.controller.dto.ChatMessageDto;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.Message;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,8 +42,10 @@ public class AiController {
             @RequestBody String prompt, 
             @RequestParam(defaultValue = "sessao-unica-123") String conversationId
     ) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+                
         return chatClient.prompt()
-                .system(system -> system.param("agora", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)))
+                .system(system -> system.param("agora", timestamp))
                 .user(prompt)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call()
@@ -50,10 +53,12 @@ public class AiController {
     }
     
     @GetMapping("/history")
-    public List<Message> getHistory(
+    public List<ChatMessageDto> getHistory(
             @RequestParam(defaultValue = "sessao-unica-123") final String conversationId
     ) {
-        return chatMemory.get(conversationId);
+        return chatMemory.get(conversationId).stream()
+                .map(ChatMessageDto::fromMessage)
+                .collect(Collectors.toList());
     }
     
     

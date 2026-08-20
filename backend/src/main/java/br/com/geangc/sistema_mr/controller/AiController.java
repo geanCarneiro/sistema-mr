@@ -4,10 +4,13 @@
  */
 package br.com.geangc.sistema_mr.controller;
 
+import br.com.geangc.sistema_mr.configuration.SanitizedNeo4jChatMemoryRepository;
 import br.com.geangc.sistema_mr.controller.dto.ChatMessageDto;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -27,14 +30,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AiController {
     
     private final ChatClient chatClient;
-    private final ChatMemory chatMemory;
+    private final SanitizedNeo4jChatMemoryRepository chatMemoryRepository;
     
     public AiController(
             final ChatClient chatClient,
-            final ChatMemory chatMemory
+            final SanitizedNeo4jChatMemoryRepository chatMemoryRepository
     ) {
         this.chatClient = chatClient;
-        this.chatMemory = chatMemory;
+        this.chatMemoryRepository = chatMemoryRepository;
     }
     
     @PostMapping
@@ -42,7 +45,8 @@ public class AiController {
             @RequestBody String prompt, 
             @RequestParam(defaultValue = "sessao-unica-123") String conversationId
     ) {
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String timestamp = LocalDateTime.now(ZoneId.of("America/Sao_Paulo"))
+                .format(DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy 'às' HH:mm '(Horário de Brasília)'", Locale.of("pt", "BR")));
                 
         return chatClient.prompt()
                 .system(system -> system.param("agora", timestamp))
@@ -56,7 +60,7 @@ public class AiController {
     public List<ChatMessageDto> getHistory(
             @RequestParam(defaultValue = "sessao-unica-123") final String conversationId
     ) {
-        return chatMemory.get(conversationId).stream()
+        return chatMemoryRepository.findByConversationId(conversationId).stream()
                 .map(ChatMessageDto::fromMessage)
                 .collect(Collectors.toList());
     }

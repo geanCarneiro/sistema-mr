@@ -23,7 +23,9 @@ public record ChatMessageDto(
                 Optional.ofNullable(message.getMetadata().get("timestamp"))
                         .map(Object::toString)
                         .orElse(null), 
-                message.getText()
+                Optional.ofNullable(message.getMetadata().get("rawContent"))
+                        .map(Object::toString)
+                        .orElse(null)
         );
     }
     

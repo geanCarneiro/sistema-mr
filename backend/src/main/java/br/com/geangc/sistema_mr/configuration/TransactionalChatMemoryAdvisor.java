@@ -6,14 +6,23 @@ package br.com.geangc.sistema_mr.configuration;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.content.Media;
 
 /**
  *
@@ -21,6 +30,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
  */
 public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
 
+    private final Logger logger = LoggerFactory.getLogger(TransactionalChatMemoryAdvisor.class);
+    
     private final ChatMemory chatMemory;
 
     public TransactionalChatMemoryAdvisor(ChatMemory chatMemory) {
@@ -32,35 +43,73 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
         String conversationId = (String) chatClientRequest.context()
                 .getOrDefault(ChatMemory.CONVERSATION_ID, "default");
 
-        var time = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        // 1. (Opcional) Carrega o histórico anterior para enviar ao modelo
-        // List<Message> history = chatMemory.get(conversationId, 10);
+        String userTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String rawPrompt = chatClientRequest.prompt().getUserMessage().getText();
+        String formattedUserPrompt = String.format("[%s] %s", userTime, rawPrompt);
 
-        // 2. Executa a chamada do Gemini/Tools
-        // Se der erro AQUI (ex: API down, script falhou), o código dispara exceção e NÃO salva nada!
-        ChatClientResponse response = callAdvisorChain.nextCall(chatClientRequest);
+        Map<String, Object> userMetadata = Map.of(
+                "timestamp", userTime,
+                "rawContent", rawPrompt
+        );
+        UserMessage updatedUserMessage = UserMessage.builder()
+                .text(formattedUserPrompt)
+                .metadata(userMetadata)
+                .build();
+
         
-        // 3. SÓ CHEGA AQUI SE DEU TUDO CERTO! 
-        // Agora sim salvamos a mensagem do usuário e a resposta no Neo4j com segurança.
-        chatMemory.add(conversationId, chatClientRequest.prompt()
-                                        .getUserMessage()
-                                        .mutate()
-                                        .metadata(Map.of("timestamp", time))
-                                        .build()
-                        );
+        List<Message> fullHistory = chatMemory.get(conversationId);
+
+        // Pega no máximo as últimas 100 mensagens sem estourar se houver menos
+        int maxMessages = 100;
+        int fromIndex = Math.max(0, fullHistory.size() - maxMessages);
+
+        List<Message> history = fullHistory.subList(fromIndex, fullHistory.size());
+
+        // 2. MONTA A LISTA COMPLETA (Instruções/System + Histórico + Nova Mensagem)
+        List<Message> fullInstructions = new ArrayList<>();
+
+        // Mantém mensagens de sistema ou configurações presentes na requisição original
+        chatClientRequest.prompt().getInstructions().stream()
+                .filter(msg -> !(msg instanceof UserMessage))
+                .forEach(fullInstructions::add);
+
+        // Adiciona o histórico recuperado do Neo4j/Memory
+        fullInstructions.addAll(history);
+
+        // Adiciona a mensagem atual formatada
+        fullInstructions.add(updatedUserMessage);
         
+        Prompt newPrompt = new Prompt(fullInstructions, chatClientRequest.prompt().getOptions());
+        ChatClientRequest mutatedRequest = chatClientRequest.mutate().prompt(newPrompt).build();
+        
+         ChatClientResponse response = callAdvisorChain.nextCall(mutatedRequest);
+
         var resp = response.chatResponse();
-        
         if (resp != null && resp.getResult() != null) {
-            
-            final HashMap<String, Object> assistantMetadata = new HashMap(resp.getResult().getOutput().getMetadata());
-            
-            assistantMetadata.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-            
-            chatMemory.add(conversationId, AssistantMessage.builder()
-                                .content(resp.getResult().getOutput().getText())
-                                .properties(assistantMetadata)
-                                .build());
+
+            // 2. Não grava no histórico se a resposta do modelo for um disparo de ferramenta (Tool Call)
+            if (resp.getResult().getOutput().hasToolCalls()) {
+                return response;
+            }
+
+            // 3. Grava as mensagens na memória somente no encerramento da resposta final
+            chatMemory.add(conversationId, updatedUserMessage);
+
+            String assistantTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            Map<String, Object> assistantMetadata = new HashMap<>(resp.getResult().getOutput().getMetadata());
+
+            String rawResponse = resp.getResult().getOutput().getText();
+            if (rawResponse != null) {
+                assistantMetadata.put("timestamp", assistantTime);
+                assistantMetadata.put("rawContent", rawResponse);
+
+                AssistantMessage assistantMessage = AssistantMessage.builder()
+                        .content(String.format("[%s] %s", assistantTime, rawResponse))
+                        .properties(assistantMetadata)
+                        .build();
+
+                chatMemory.add(conversationId, assistantMessage);
+            }
         }
 
         return response;

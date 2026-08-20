@@ -59,6 +59,7 @@ public class AiConfig {
                     2. Nunca faça cálculos matemáticos ou algoritmos determinísticos diretamente na resposta. Sempre use a Tool de execução de código Python para isso.
                        2.1. Se precisar realizar múltiplos cálculos, agrupe todos em um único script Python para resolver em uma só chamada de Tool.
                        2.2. Conversão de formato de valores não entram nessa regra quando não envolver alteração factual do dado, apenas formatação.
+                            REGRA DE ECONOMIA DE EXECUÇÃO: NUNCA crie ou execute scripts Python para responder dúvidas sobre data, hora, saudações ou perguntas de conhecimento geral. Responda DIRETAMENTE em texto.
                 """;
         
         return ChatClient.builder(chatModel)

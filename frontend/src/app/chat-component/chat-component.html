@@ -9,7 +9,12 @@
   <!-- Lista de mensagens -->
   <main class="chat-history" #scrollContainer>
     @for (msg of messages(); track $index) {
-      <div [class]="'chat-bubble ' + (msg.messageType === 'USER' ? 'user' : 'assistant')">
+      <div [class]="'chat-bubble ' + (msg.messageType === 'USER' ? 'user' : 'assistant')"
+            [ngClass]="{
+                'user': msg.messageType === 'USER',
+                'assistant': msg.messageType !== 'USER',
+                'invalid': msg.notValid
+            }">
         <div class="bubble-header">
           <strong>{{ (msg.messageType === 'USER') ? 'Você' : 'Gemini' }}</strong>
           {{msg.timestamp | date: "dd/MM/yyyy 'as' HH:mm:ss"}}

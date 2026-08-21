@@ -8,6 +8,14 @@ spring:
       neo4j:
         database-name: neo4j
         index-name: chat-memory-index
+
+    chat:
+      client:
+        observations:
+          # Inclui o texto exato do Prompt enviado nos logs/mecanismos de observabilidade
+          include-prompt-content: true
+          # Inclui o texto exato da resposta (Completion) nos logs/mecanismos de observabilidade
+          include-completion-content: true
     
     google:
       genai:
@@ -26,4 +34,22 @@ spring:
     authentication:
       username: neo4j
       password: ${PASSWD_NEO4J}
-  
+
+logging:
+  level:
+    # Ativa o log do Advisor básico de logs
+    org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor: DEBUG
+    
+    # Ativa os logs de execução e gerenciamento de Tool Calls (Funções)
+    org.springframework.ai.model.tool.DefaultToolCallingManager: DEBUG
+    
+    # Ativa o log geral de todo o ecossistema Spring AI (Modelos, Embeddings, Vetores, etc.)
+    org.springframework.ai: DEBUG
+    
+    # Opcional: Ativa logs detalhados do cliente HTTP padrão do Spring (RestClient/WebClient)
+    org.springframework.web.client: DEBUG
+    org.springframework.http.client: DEBUG
+
+
+google:
+  client-id: 193676940290-fbbs2vstgn9hrgel1mkgirtovdbvo0j3.apps.googleusercontent.com

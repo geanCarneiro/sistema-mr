@@ -66,10 +66,22 @@
   border-radius: 6px;
   line-height: 1.4;
 
+  &.invalid {
+    border: 1px dashed #ef4444; /* Borda da div tracejada */
+    opacity: 0.6;               /* Texto/balão meio apagado */
+    background-color: #fef2f2;  /* Fundo avermelhado leve */
+    text-decoration: line-through solid;
+
+    p, span, div {
+      text-decoration: line-through solid;
+    }
+  }
+
   &.user {
     align-self: flex-end;
     background-color: #0e639c;
     color: #ffffff;
+
   }
 
   &.assistant {

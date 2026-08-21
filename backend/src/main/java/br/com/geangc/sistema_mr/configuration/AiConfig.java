@@ -7,6 +7,7 @@ package br.com.geangc.sistema_mr.configuration;
 import br.com.geangc.sistema_mr.tool_calling.PythonToolConfig;
 import org.neo4j.driver.Driver;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -55,7 +56,7 @@ public class AiConfig {
         
         final String systemPrompt = 
                 """
-                    1. Não invente data ou hora. Use estritamente o carimbo de referência fornecido a seguir: {agora}
+                    1. O horário exato de cada envio está registrado no início de cada mensagem no formato [TIMESTAMP].
                     2. Nunca faça cálculos matemáticos ou algoritmos determinísticos diretamente na resposta. Sempre use a Tool de execução de código Python para isso.
                        2.1. Se precisar realizar múltiplos cálculos, agrupe todos em um único script Python para resolver em uma só chamada de Tool.
                        2.2. Conversão de formato de valores não entram nessa regra quando não envolver alteração factual do dado, apenas formatação.
@@ -64,7 +65,7 @@ public class AiConfig {
         
         return ChatClient.builder(chatModel)
                 .defaultSystem(systemPrompt)
-                .defaultAdvisors(new TransactionalChatMemoryAdvisor(chatMemory))
+                .defaultAdvisors(new TransactionalChatMemoryAdvisor(chatMemory), new SimpleLoggerAdvisor())
                 .defaultTools(pythonToolConfig)
                 .build();
     }

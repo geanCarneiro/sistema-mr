@@ -20,6 +20,7 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
@@ -44,62 +45,79 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
                 .getOrDefault(ChatMemory.CONVERSATION_ID, "default");
 
         String userTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        String rawPrompt = chatClientRequest.prompt().getUserMessage().getText();
-        String formattedUserPrompt = String.format("[%s] %s", userTime, rawPrompt);
 
-        Map<String, Object> userMetadata = Map.of(
-                "timestamp", userTime,
-                "rawContent", rawPrompt
-        );
-        UserMessage updatedUserMessage = UserMessage.builder()
-                .text(formattedUserPrompt)
-                .metadata(userMetadata)
-                .build();
+        // Pega a mensagem de usuário caso ela exista no prompt original
+        UserMessage currentUserMessage = chatClientRequest.prompt().getUserMessage();
+        UserMessage updatedUserMessage = null;
 
-        
-        List<Message> fullHistory = chatMemory.get(conversationId);
+        if (currentUserMessage != null && currentUserMessage.getText() != null) {
+            String rawPrompt = currentUserMessage.getText();
+            String formattedUserPrompt = String.format("[%s] %s", userTime, rawPrompt);
 
-        // Pega no máximo as últimas 100 mensagens sem estourar se houver menos
-        int maxMessages = 100;
-        int fromIndex = Math.max(0, fullHistory.size() - maxMessages);
+            Map<String, Object> userMetadata = Map.of(
+                    "timestamp", userTime,
+                    "rawContent", rawPrompt
+            );
+            updatedUserMessage = UserMessage.builder()
+                    .text(formattedUserPrompt)
+                    .metadata(userMetadata)
+                    .build();
+        }
 
-        List<Message> history = fullHistory.subList(fromIndex, fullHistory.size());
+        // SE A REQUISIÇÃO JÁ É UM RETORNO DE TOOL (ou contém chamadas de Tool pendentes),
+        // NÃO PODEMOS REORGANIZAR OU REINJETAR O HISTÓRICO PARA NÃO QUEBRAR O GEMINI!
+        boolean isToolTurn = chatClientRequest.prompt().getInstructions().stream()
+                .anyMatch(msg -> msg instanceof ToolResponseMessage || 
+                         (msg instanceof AssistantMessage am && am.hasToolCalls()));
 
-        // 2. MONTA A LISTA COMPLETA (Instruções/System + Histórico + Nova Mensagem)
-        List<Message> fullInstructions = new ArrayList<>();
+        ChatClientRequest finalRequest = chatClientRequest;
 
-        // Mantém mensagens de sistema ou configurações presentes na requisição original
-        chatClientRequest.prompt().getInstructions().stream()
-                .filter(msg -> !(msg instanceof UserMessage))
-                .forEach(fullInstructions::add);
+        if (!isToolTurn) {
+            List<Message> fullHistory = chatMemory.get(conversationId);
+            int maxMessages = 100;
+            int fromIndex = Math.max(0, fullHistory.size() - maxMessages);
+            List<Message> history = fullHistory.subList(fromIndex, fullHistory.size());
 
-        // Adiciona o histórico recuperado do Neo4j/Memory
-        fullInstructions.addAll(history);
+            List<Message> fullInstructions = new ArrayList<>();
 
-        // Adiciona a mensagem atual formatada
-        fullInstructions.add(updatedUserMessage);
-        
-        Prompt newPrompt = new Prompt(fullInstructions, chatClientRequest.prompt().getOptions());
-        ChatClientRequest mutatedRequest = chatClientRequest.mutate().prompt(newPrompt).build();
-        
-         ChatClientResponse response = callAdvisorChain.nextCall(mutatedRequest);
+            // 1. Mensagens de Sistema (SystemMessage)
+            chatClientRequest.prompt().getInstructions().stream()
+                    .filter(msg -> !(msg instanceof UserMessage))
+                    .forEach(fullInstructions::add);
+
+            // 2. Histórico da conversa recuperado do banco
+            fullInstructions.addAll(history);
+
+            // 3. Mensagem do usuário atual
+            if (updatedUserMessage != null) {
+                fullInstructions.add(updatedUserMessage);
+            }
+
+            Prompt newPrompt = new Prompt(fullInstructions, chatClientRequest.prompt().getOptions());
+            finalRequest = chatClientRequest.mutate().prompt(newPrompt).build();
+        }
+
+        // Executa a chamada
+        ChatClientResponse response = callAdvisorChain.nextCall(finalRequest);
 
         var resp = response.chatResponse();
         if (resp != null && resp.getResult() != null) {
 
-            // 2. Não grava no histórico se a resposta do modelo for um disparo de ferramenta (Tool Call)
+            // Não grava no histórico se a resposta intermediária do modelo for um disparo de Tool
             if (resp.getResult().getOutput().hasToolCalls()) {
                 return response;
             }
 
-            // 3. Grava as mensagens na memória somente no encerramento da resposta final
-            chatMemory.add(conversationId, updatedUserMessage);
+            // Grava as mensagens no histórico somente na resposta final do texto
+            if (updatedUserMessage != null) {
+                chatMemory.add(conversationId, updatedUserMessage);
+            }
 
             String assistantTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
             Map<String, Object> assistantMetadata = new HashMap<>(resp.getResult().getOutput().getMetadata());
 
             String rawResponse = resp.getResult().getOutput().getText();
-            if (rawResponse != null) {
+            if (rawResponse != null && !rawResponse.isBlank()) {
                 assistantMetadata.put("timestamp", assistantTime);
                 assistantMetadata.put("rawContent", rawResponse);
 

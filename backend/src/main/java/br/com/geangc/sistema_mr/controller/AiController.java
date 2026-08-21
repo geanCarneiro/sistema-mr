@@ -14,6 +14,8 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,20 +42,39 @@ public class AiController {
         this.chatMemoryRepository = chatMemoryRepository;
     }
     
+        // DTO de requisição
+    public record ChatRequestDTO(
+        String prompt,
+        LocalDateTime timestamp // Opcional, se o front quiser mandar a hora local
+    ) {}
+
+    // DTO de resposta
+    public record ChatResponseDTO(
+        String content,
+        LocalDateTime timestamp,
+        String messageType
+    ) {}
+    
     @PostMapping
-    public String chat(
-            @RequestBody String prompt, 
+    public ResponseEntity<ChatResponseDTO> chat(
+            @RequestBody ChatRequestDTO request, 
             @RequestParam(defaultValue = "sessao-unica-123") String conversationId
     ) {
-        String timestamp = LocalDateTime.now(ZoneId.of("America/Sao_Paulo"))
-                .format(DateTimeFormatter.ofPattern("EEEE, dd/MM/yyyy 'às' HH:mm '(Horário de Brasília)'", Locale.of("pt", "BR")));
-                
-        return chatClient.prompt()
-                .system(system -> system.param("agora", timestamp))
-                .user(prompt)
+        // 1. Processa a chamada no ChatClients
+        AssistantMessage assistantMessage = 
+                chatClient.prompt()
+                .user(request.prompt())
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                .call()
-                .content();
+                .call().chatResponse().getResult().getOutput();
+        
+        // 2. Retorna a resposta com o timestamp exato do servidor
+        ChatResponseDTO responseDTO = new ChatResponseDTO(
+                assistantMessage.getText(),
+                (LocalDateTime) assistantMessage.getMetadata().get("timestamp"),
+                "ASSISTANT"
+        );
+
+        return ResponseEntity.ok(responseDTO);
     }
     
     @GetMapping("/history")

@@ -57,6 +57,7 @@ public class AiConfig {
         final String systemPrompt = 
                 """
                     1. O horário exato de cada envio está registrado no início de cada mensagem no formato [TIMESTAMP].
+                       1.1. Nas suas respostas, responda DIRETAMENTE ao usuário com texto limpo, SEM incluir marcas de tempo ou colchetes no seu texto.
                     2. Nunca faça cálculos matemáticos ou algoritmos determinísticos diretamente na resposta. Sempre use a Tool de execução de código Python para isso.
                        2.1. Se precisar realizar múltiplos cálculos, agrupe todos em um único script Python para resolver em uma só chamada de Tool.
                        2.2. Conversão de formato de valores não entram nessa regra quando não envolver alteração factual do dado, apenas formatação.

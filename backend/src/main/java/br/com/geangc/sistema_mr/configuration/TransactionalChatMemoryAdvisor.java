@@ -22,6 +22,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 
@@ -127,6 +129,20 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
                         .build();
 
                 chatMemory.add(conversationId, assistantMessage);
+            
+                // --- O SEGREDO ESTÁ AQUI: VOCÊ PRECISA DEVOLVER A MENSAGEM ALTERADA ---
+
+                // 1. Recriamos a geração de resposta (Generation) com a nossa nova mensagem
+                Generation novaGeneration = new Generation(assistantMessage, resp.getResult().getMetadata());
+
+                // 2. Recriamos o ChatResponse substituindo o resultado antigo pelo novo
+                ChatResponse novoChatResponse = new ChatResponse(List.of(novaGeneration), resp.getMetadata());
+
+                // 3. Mutamos a resposta final do ChatClientResponse para usar o nosso ChatResponse enriquecido
+                return ChatClientResponse.builder()
+                        .chatResponse(novoChatResponse)
+                        .build();
+            
             }
         }
 

@@ -1,9 +1,14 @@
 # Stage 1: Build da aplicação Angular
 FROM node:20-alpine AS build
 WORKDIR /app
+
+ARG GOOGLE_API_CLIENT_ID
+
 COPY package*.json ./
 RUN npm install
 COPY . .
+
+RUN sed -i "s|CLIENT_ID|${GOOGLE_API_CLIENT_ID}|g" src/shared/envirement/config.env.ts
 RUN npm run build -- --configuration production
 
 # Stage 2: Servidor Nginx pra entregar a SPA

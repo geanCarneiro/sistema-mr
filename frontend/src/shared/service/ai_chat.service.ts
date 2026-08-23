@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { IChatMessage } from '../interface/chat_message.interface';
 import { Observable, of, map, catchError, finalize } from 'rxjs';
+import { AuthService } from './auth.service';
 
 export interface IChatResponse {
   content: string;
@@ -11,13 +12,18 @@ export interface IChatResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AiChatService {
-  public readonly CONVERSATION_ID = 'sessao-unica-123';
+  public readonly CONVERSATION_ID: string;
   private readonly urlBase = '/ai/chat';
 
   public menssages = signal<IChatMessage[]>([]);
   public loading = signal<boolean>(false);
 
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    private readonly authService: AuthService
+  ) {
+    this.CONVERSATION_ID = `chat-${this.authService.userData.sub}`;
+  }
 
   public enviar(prompt: string): void {
     prompt = prompt?.trim();
@@ -30,7 +36,7 @@ export class AiChatService {
       messageType: 'USER',
       content: prompt,
       timestamp: now.toISOString(),
-      notValid: false
+      notValid: false,
     };
 
     // Adiciona a mensagem do usuário na tela
@@ -38,7 +44,7 @@ export class AiChatService {
     this.loading.set(true);
 
     // Payload enviado ao back-end
-    const payload = { prompt, timestamp: now.toISOString() };
+    const payload = { prompt, timestamp: now.toISOString(), conversationId: this.CONVERSATION_ID };
 
     this.http
       .post<IChatResponse>(this.urlBase, payload)

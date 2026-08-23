@@ -11,6 +11,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -45,7 +46,8 @@ public class AiController {
         // DTO de requisição
     public record ChatRequestDTO(
         String prompt,
-        LocalDateTime timestamp // Opcional, se o front quiser mandar a hora local
+        LocalDateTime timestamp, // Opcional, se o front quiser mandar a hora local
+        String conversationId
     ) {}
 
     // DTO de resposta
@@ -57,20 +59,22 @@ public class AiController {
     
     @PostMapping
     public ResponseEntity<ChatResponseDTO> chat(
-            @RequestBody ChatRequestDTO request, 
-            @RequestParam(defaultValue = "sessao-unica-123") String conversationId
+            @RequestBody ChatRequestDTO request
     ) {
         // 1. Processa a chamada no ChatClients
         AssistantMessage assistantMessage = 
                 chatClient.prompt()
                 .user(request.prompt())
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, request.conversationId))
                 .call().chatResponse().getResult().getOutput();
         
         // 2. Retorna a resposta com o timestamp exato do servidor
         ChatResponseDTO responseDTO = new ChatResponseDTO(
-                assistantMessage.getText(),
-                (LocalDateTime) assistantMessage.getMetadata().get("timestamp"),
+                Optional.ofNullable(assistantMessage.getMetadata().get("rawContent").toString())
+                        .orElse(null),
+                Optional.ofNullable(assistantMessage.getMetadata().get("timestamp").toString())
+                        .map(_ts ->  LocalDateTime.parse(_ts, DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                        .orElse(null),
                 "ASSISTANT"
         );
 

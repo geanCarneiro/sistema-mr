@@ -9,19 +9,24 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.HttpStatusCodes;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jose.proc.SecurityContext;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
-import java.util.Collection;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
-import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,11 +41,16 @@ public class AuthController {
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
     
     private final String clientId;
+    
+    private final JwtEncoder jwtEncoder;
 
     public AuthController(
-            @Value("${google.client-id}") final String clientId
+            @Value("${google.client-id}") final String clientId,
+            @Value("${jwt.secret}") final String jwtSecret
     ) {
         this.clientId = clientId;
+        var key = new ImmutableSecret<SecurityContext>(jwtSecret.getBytes());
+        this.jwtEncoder = new NimbusJwtEncoder(key);
     }
         
     @PostMapping("/api/v1/auth/google")
@@ -60,8 +70,33 @@ public class AuthController {
             
             GoogleIdToken.Payload userData = token.getPayload();
             
-            userData.forEach((k, v) -> logger.info("{0}: {1}", k, String.valueOf(v)));            
+            if(!userData.getEmailVerified()){
             
+                return ResponseEntity
+                        .status(HttpStatusCodes.STATUS_CODE_UNAUTHORIZED)
+                        .body("Email não validado, favor validar seu email antes de continuar");
+            }
+            
+            
+            
+            Instant now = Instant.now();
+                        
+            JwtClaimsSet claims = JwtClaimsSet.builder()
+                    .issuer("sistema-mr")
+                    .issuedAt(now)
+                    .expiresAt(now.plus(1, ChronoUnit.DAYS))
+                    .subject(userData.getSubject())
+                    .claim("nome", userData.get("name"))
+                    .claim("avatar", userData.get("picture"))
+                    .claim("email", userData.get("email"))
+                    .build();
+            
+            JwsHeader jwsHeader = JwsHeader.with(MacAlgorithm.HS256).build();
+            
+            
+            return ResponseEntity.ok(
+                 this.jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, claims)).getTokenValue()
+            );
             
         } catch (GeneralSecurityException ex) {
             UUID uuid = UUID.randomUUID();
@@ -81,7 +116,6 @@ public class AuthController {
         }
         
         
-        return null;
     }
     
     

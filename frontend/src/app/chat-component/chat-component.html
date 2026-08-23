@@ -16,7 +16,7 @@
                 'invalid': msg.notValid
             }">
         <div class="bubble-header">
-          <strong>{{ (msg.messageType === 'USER') ? 'Você' : 'Gemini' }}</strong>
+          <strong>{{ (msg.messageType === 'USER') ? userData?.nome : 'Gemini' }}</strong>
           {{msg.timestamp | date: "dd/MM/yyyy 'as' HH:mm:ss"}}
         </div>
         <div class="bubble-content">

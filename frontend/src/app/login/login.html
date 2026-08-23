@@ -1,0 +1,12 @@
+<div class="login-container">
+  <div class="login-card">
+    <h2>Bem-vindo 👋</h2>
+    <p>Faça login para acessar o assistente</p>
+
+    <!-- Container onde o Google vai desenhar o botão nativo -->
+    <div id="googleBtn" class="google-btn-wrapper"></div>
+
+    <p *ngIf="loading()" class="loading-txt">Validando credenciais com o servidor...</p>
+    <p *ngIf="erro()" class="error-txt">⚠️ {{ erro() }}</p>
+  </div>
+</div>

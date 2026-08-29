@@ -4,13 +4,11 @@
  */
 package br.com.geangc.sistema_mr.configuration;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -25,7 +23,6 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.content.Media;
 
 /**
  *
@@ -46,7 +43,7 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
         String conversationId = (String) chatClientRequest.context()
                 .getOrDefault(ChatMemory.CONVERSATION_ID, "default");
 
-        String userTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String userTime = Instant.now().toString();
 
         // Pega a mensagem de usuário caso ela exista no prompt original
         UserMessage currentUserMessage = chatClientRequest.prompt().getUserMessage();
@@ -75,10 +72,7 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
         ChatClientRequest finalRequest = chatClientRequest;
 
         if (!isToolTurn) {
-            List<Message> fullHistory = chatMemory.get(conversationId);
-            int maxMessages = 100;
-            int fromIndex = Math.max(0, fullHistory.size() - maxMessages);
-            List<Message> history = fullHistory.subList(fromIndex, fullHistory.size());
+            List<Message> history = chatMemory.get(conversationId);
 
             List<Message> fullInstructions = new ArrayList<>();
 
@@ -115,7 +109,7 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
                 chatMemory.add(conversationId, updatedUserMessage);
             }
 
-            String assistantTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            String assistantTime = Instant.now().toString();
             Map<String, Object> assistantMetadata = new HashMap<>(resp.getResult().getOutput().getMetadata());
 
             String rawResponse = resp.getResult().getOutput().getText();

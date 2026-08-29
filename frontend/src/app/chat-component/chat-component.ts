@@ -17,17 +17,16 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   messages: WritableSignal<IChatMessage[]>;
   prompt = signal<string>('');
   loading: WritableSignal<boolean>;
-  conversationId: string;
-  userData: IUserData;
+  userData: IUserData | null;
+  private renderedMessageCount = -1;
 
   constructor(
     private aiChatService: AiChatService,
     private authService: AuthService,
   ) {
-    this.messages = this.aiChatService.menssages;
+    this.messages = this.aiChatService.messages;
     this.loading = this.aiChatService.loading;
     this.userData = this.authService.userData;
-    this.conversationId = this.aiChatService.CONVERSATION_ID;
   }
 
   ngOnInit() {
@@ -35,7 +34,10 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   }
 
   ngAfterViewChecked() {
-    this.scrollToBottom();
+    if (this.renderedMessageCount !== this.messages().length) {
+      this.renderedMessageCount = this.messages().length;
+      this.scrollToBottom();
+    }
   }
 
   recarregarChat() {
@@ -45,6 +47,10 @@ export class ChatComponent implements OnInit, AfterViewChecked {
   enviar() {
     this.aiChatService.enviar(this.prompt());
     this.prompt.set('');
+  }
+
+  logout(): void {
+    this.authService.logout();
   }
 
   private scrollToBottom(): void {

@@ -1,5 +1,4 @@
-import { Component, OnInit, signal, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { AuthService } from '../../shared/service/auth.service';
 import { configEnv } from '../../shared/envirement/config.env';
@@ -12,7 +11,7 @@ import { configEnv } from '../../shared/envirement/config.env';
   styleUrl: './login.scss',
 })
 export class LoginComponent implements OnInit {
-  private http = inject(HttpClient);
+  private googleSdkAttempts = 0;
 
   public readonly loading;
   public readonly erro;
@@ -30,8 +29,17 @@ export class LoginComponent implements OnInit {
   }
 
   private inicializarGoogleAuth(): void {
+    if (!configEnv.clientId) {
+      this.erro.set('GOOGLE_API_CLIENT_ID não foi configurado.');
+      return;
+    }
+
     if (typeof google === 'undefined') {
-      setTimeout(() => this.inicializarGoogleAuth(), 300); // Aguarda script carregar
+      if (this.googleSdkAttempts++ >= 20) {
+        this.erro.set('Não foi possível carregar o login do Google.');
+        return;
+      }
+      setTimeout(() => this.inicializarGoogleAuth(), 300);
       return;
     }
 
@@ -54,7 +62,13 @@ export class LoginComponent implements OnInit {
     });
 
     // 3. Renderiza também o botão nativo do Google dentro da div
-    google.accounts.id.renderButton(document.getElementById('googleBtn'), {
+    const googleButton = document.getElementById('googleBtn');
+    if (!googleButton) {
+      this.erro.set('Não foi possível montar o botão de login.');
+      return;
+    }
+
+    google.accounts.id.renderButton(googleButton, {
       theme: 'outline',
       size: 'large',
       shape: 'rectangular',
@@ -74,9 +88,6 @@ export class LoginComponent implements OnInit {
     this.loading.set(true);
     this.erro.set(undefined);
 
-    console.log('id_token obtido no front! Enviando pro back...');
-
-    // Envia pro Controller do Spring
     this.authService.doLogin(idToken);
   }
 }

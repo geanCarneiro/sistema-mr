@@ -1,17 +1,29 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 
-import { Login } from './login';
+import { LoginComponent } from './login';
+import { AuthService } from '../../shared/service/auth.service';
 
-describe('Login', () => {
-  let component: Login;
-  let fixture: ComponentFixture<Login>;
+describe('LoginComponent', () => {
+  let component: LoginComponent;
+  let fixture: ComponentFixture<LoginComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [Login],
+      imports: [LoginComponent],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: {
+            loading: signal(false),
+            erro: signal<string | undefined>(undefined),
+            doLogin: vi.fn(),
+          },
+        },
+      ],
     }).compileComponents();
 
-    fixture = TestBed.createComponent(Login);
+    fixture = TestBed.createComponent(LoginComponent);
     component = fixture.componentInstance;
     await fixture.whenStable();
   });

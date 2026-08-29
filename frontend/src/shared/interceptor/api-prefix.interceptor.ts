@@ -2,7 +2,7 @@ import { HttpInterceptorFn } from '@angular/common/http';
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
   // Se a URL já for externa (ex: https://...) ou já tiver /api, deixa passar
-  if (req.url.startsWith('http')) {
+  if (req.url.startsWith('http') || req.url === '/api' || req.url.startsWith('/api/')) {
     return next(req);
   }
 

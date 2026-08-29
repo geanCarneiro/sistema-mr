@@ -2,8 +2,10 @@
   <!-- Cabeçalho simples -->
   <header class="chat-header">
     <h2>AI Chat Sandbox</h2>
-    <span class="session-badge">ID: {{ conversationId }}</span>
-    <button class="btn-refresh" (click)="recarregarChat()">🔄 Recarregar Histórico</button>
+    <div class="header-actions">
+      <button class="btn-refresh" (click)="recarregarChat()">🔄 Recarregar Histórico</button>
+      <button class="btn-refresh" (click)="logout()">Sair</button>
+    </div>
   </header>
 
   <!-- Lista de mensagens -->

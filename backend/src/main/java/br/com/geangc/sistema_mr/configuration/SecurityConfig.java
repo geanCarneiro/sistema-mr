@@ -4,6 +4,9 @@
  */
 package br.com.geangc.sistema_mr.configuration;
 
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import com.nimbusds.jose.proc.SecurityContext;
+import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +17,11 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
@@ -42,13 +49,30 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**").permitAll() // Libera endpoints de login
                 .anyRequest().authenticated()                   // Protege o resto (Chat, etc)
             )
-            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder()))) // Valida JWT nativo!
+            .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.decoder(jwtDecoder())))
             .build();
     }
     
     @Bean
     public JwtDecoder jwtDecoder() {
-        SecretKey originalKey = new SecretKeySpec(jwtSecret.getBytes(), "HmacSHA256");
-        return NimbusJwtDecoder.withSecretKey(originalKey).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder
+                .withSecretKey(secretKey())
+                .macAlgorithm(MacAlgorithm.HS256)
+                .build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer("sistema-mr"));
+        return decoder;
+    }
+
+    @Bean
+    public JwtEncoder jwtEncoder() {
+        return new NimbusJwtEncoder(new ImmutableSecret<SecurityContext>(secretKey()));
+    }
+
+    private SecretKey secretKey() {
+        byte[] secretBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (secretBytes.length < 32) {
+            throw new IllegalStateException("JWT_SECRET deve possuir no mínimo 32 bytes");
+        }
+        return new SecretKeySpec(secretBytes, "HmacSHA256");
     }
 }

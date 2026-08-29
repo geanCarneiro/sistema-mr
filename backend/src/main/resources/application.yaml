@@ -3,11 +3,6 @@ spring:
     name: sistema-mr
       
   ai:
-    vectorstore:
-      neo4j:
-        database-name: neo4j
-        index-name: chat-memory-index
-
 #    chat:
 #      client:
 #        observations:
@@ -50,7 +45,11 @@ spring:
 #    org.springframework.http.client: DEBUG
 
 jwt:
-  secret: jp3rODuEx87ivqPIfpWOSkkNVHTd9r9t
+  secret: ${JWT_SECRET}
 
 google:
   client-id: ${GOOGLE_API_CLIENT_ID}
+
+python:
+  runner:
+    url: ${PYTHON_RUNNER_URL:http://localhost:8081}

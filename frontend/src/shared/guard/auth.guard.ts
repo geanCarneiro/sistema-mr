@@ -1,18 +1,13 @@
 import { CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
+import { AuthService } from '../service/auth.service';
 
 export const authGuard: CanActivateFn = (route, state) => {
   const router = inject(Router);
+  const authService = inject(AuthService);
 
-  const token = localStorage.getItem('token');
-
-  if (token) {
-    const {exp} = JSON.parse(atob(token.split('.')[1]));
-
-    if(Date.now() / 1000 < exp) {
-      return true;
-    }
-
+  if (authService.isAuthenticated()) {
+    return true;
   }
 
   console.warn('Acesso negado! Redirecionando para /login...');

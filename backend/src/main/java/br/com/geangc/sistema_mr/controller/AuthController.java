@@ -7,26 +7,19 @@ package br.com.geangc.sistema_mr.controller;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.HttpStatusCodes;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
-import com.nimbusds.jose.proc.SecurityContext;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -40,41 +33,36 @@ public class AuthController {
     
     private final Logger logger = LoggerFactory.getLogger(AuthController.class);
     
-    private final String clientId;
-    
+    private final GoogleIdTokenVerifier googleIdTokenVerifier;
     private final JwtEncoder jwtEncoder;
 
     public AuthController(
-            @Value("${google.client-id}") final String clientId,
-            @Value("${jwt.secret}") final String jwtSecret
+            final GoogleIdTokenVerifier googleIdTokenVerifier,
+            final JwtEncoder jwtEncoder
     ) {
-        this.clientId = clientId;
-        var key = new ImmutableSecret<SecurityContext>(jwtSecret.getBytes());
-        this.jwtEncoder = new NimbusJwtEncoder(key);
+        this.googleIdTokenVerifier = googleIdTokenVerifier;
+        this.jwtEncoder = jwtEncoder;
     }
         
     @PostMapping("/api/v1/auth/google")
     public ResponseEntity<String> authenticate(
             @RequestBody String idToken
     ) {
-        
-        GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
-                new NetHttpTransport(),
-                GsonFactory.getDefaultInstance()
-        )
-        .setAudience(Collections.singletonList(this.clientId))
-        .build();
-        
+        if (idToken == null || idToken.isBlank()) {
+            return unauthorized("Token do Google ausente.");
+        }
+
         try {
-            GoogleIdToken token = verifier.verify(idToken);
+            GoogleIdToken token = googleIdTokenVerifier.verify(idToken);
+
+            if (token == null) {
+                return unauthorized("Token do Google inválido ou expirado.");
+            }
             
             GoogleIdToken.Payload userData = token.getPayload();
             
-            if(!userData.getEmailVerified()){
-            
-                return ResponseEntity
-                        .status(HttpStatusCodes.STATUS_CODE_UNAUTHORIZED)
-                        .body("Email não validado, favor validar seu email antes de continuar");
+            if (!Boolean.TRUE.equals(userData.getEmailVerified())) {
+                return unauthorized("Email não validado, favor validar seu email antes de continuar");
             }
             
             
@@ -102,9 +90,7 @@ public class AuthController {
             UUID uuid = UUID.randomUUID();
             
             logger.error("error uuid: " + uuid, ex);
-            return ResponseEntity
-                    .status(HttpStatusCodes.STATUS_CODE_UNAUTHORIZED)
-                    .body("Token do Google inválido ou expirado.");
+            return unauthorized("Token do Google inválido ou expirado.");
             
         } catch (IOException ex) {
             UUID uuid = UUID.randomUUID();
@@ -112,11 +98,13 @@ public class AuthController {
             logger.error("error uuid: " + uuid, ex);
             return ResponseEntity
                     .status(HttpStatusCodes.STATUS_CODE_SERVER_ERROR)
-                    .body("erro(" + uuid + "): " + ex.getMessage());
+                    .body("Não foi possível validar o token agora. Referência: " + uuid);
         }
-        
-        
     }
-    
-    
+
+    private ResponseEntity<String> unauthorized(String message) {
+        return ResponseEntity
+                .status(HttpStatusCodes.STATUS_CODE_UNAUTHORIZED)
+                .body(message);
+    }
 }

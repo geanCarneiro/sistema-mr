@@ -9,6 +9,10 @@ export interface IUserData {
   email: string;
 }
 
+interface IJwtPayload extends IUserData {
+  exp: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   public loading = signal(false);
@@ -23,7 +27,6 @@ export class AuthService {
     this.http.post('/api/v1/auth/google', idToken, { responseType: 'text' }).subscribe({
       next: (res) => {
         this.loading.set(false);
-        console.log('Resposta do Back-end:', res);
 
         if (res) {
           localStorage.setItem('token', res);
@@ -35,32 +38,71 @@ export class AuthService {
       error: (err) => {
         this.loading.set(false);
         console.error('Erro na resposta do back:', err);
-        this.erro.set('Erro ao autenticar com o servidor.');
+        this.erro.set(
+          typeof err.error === 'string' && err.error
+            ? err.error
+            : 'Erro ao autenticar com o servidor.',
+        );
       },
     });
   }
 
 
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('token'); // ou o nome da sua chave
+    const token = localStorage.getItem('token');
 
     if (!token) {
       return false;
     }
 
-    // Opcional: Checar se o JWT não está expirado
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const payload = this.decodeToken(token);
       const isExpired = Math.floor(Date.now() / 1000) >= payload.exp;
       return !isExpired;
-    } catch (e) {
+    } catch {
+      localStorage.removeItem('token');
       return false;
     }
   }
 
-  get userData() {
+  get userData(): IUserData | null {
     const token = localStorage.getItem('token');
 
-    return token && JSON.parse(atob(token.split('.')[1]))
+    if (!token) {
+      return null;
+    }
+
+    try {
+      return this.decodeToken(token);
+    } catch {
+      localStorage.removeItem('token');
+      return null;
+    }
+  }
+
+  logout(): void {
+    localStorage.removeItem('token');
+    this.router.navigateByUrl('/login');
+  }
+
+  private decodeToken(token: string): IJwtPayload {
+    const encodedPayload = token.split('.')[1];
+    if (!encodedPayload) {
+      throw new Error('JWT inválido');
+    }
+
+    const base64 = encodedPayload.replace(/-/g, '+').replace(/_/g, '/');
+    const paddedBase64 = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+    const bytes = Uint8Array.from(atob(paddedBase64), (character) => character.charCodeAt(0));
+    const payload: unknown = JSON.parse(new TextDecoder().decode(bytes));
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      typeof (payload as Partial<IJwtPayload>).exp !== 'number' ||
+      typeof (payload as Partial<IJwtPayload>).sub !== 'string'
+    ) {
+      throw new Error('Payload JWT inválido');
+    }
+    return payload as IJwtPayload;
   }
 }

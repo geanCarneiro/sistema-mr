@@ -1,113 +1,78 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package br.com.geangc.sistema_mr.tool_calling;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
-/**
- *
- * @author gean.carneiro
- */
 @Component
 public class PythonToolConfig {
-    
-    private final Logger logger = LoggerFactory.getLogger(PythonToolConfig.class);
-    
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PythonToolConfig.class);
+
+    private final RestClient restClient;
+
     public record PythonRequest(String code) {}
-    
-    public record PythonResponse(String output, String error){}
-    
-    @Tool(description = "Executa scripts em Python 3 para cálculos complexos, análise de dados ou algoritmos. Retorna a saída do terminal (stdout/stderr).")
+
+    public record PythonResponse(
+            String output,
+            String error,
+            Integer exitCode,
+            boolean timedOut,
+            boolean truncated
+    ) {}
+
+    public PythonToolConfig(@Value("${python.runner.url}") String runnerUrl) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(2));
+        requestFactory.setReadTimeout(Duration.ofSeconds(12));
+
+        this.restClient = RestClient.builder()
+                .baseUrl(runnerUrl)
+                .requestFactory(requestFactory)
+                .build();
+    }
+
+    @Tool(description = "Executa Python 3 em um runner isolado para cálculos matemáticos, análise de dados e algoritmos determinísticos. Bibliotecas disponíveis: math, statistics, decimal, fractions, numpy, pandas, scipy e sympy.")
     public PythonResponse executePythonCode(PythonRequest request) {
-        
+        if (request == null || request.code() == null || request.code().isBlank()) {
+            return new PythonResponse("", "Código Python vazio", null, false, false);
+        }
+
         try {
-            logger.info("Executando script python");
-            logger.info(request.code());
+            PythonResponse response = restClient.post()
+                    .uri("/execute")
+                    .body(request)
+                    .retrieve()
+                    .body(PythonResponse.class);
 
-            Path tempFile = Files.createTempFile("script__", ".py");
-
-
-            // Injeta o wrapper com auto-install dinâmico
-            String scriptComWrapper = """
-                import sys
-                import subprocess
-
-                modulos_tentados = set()
-
-                def execute():
-                %s
-
-                while True:
-                    try:
-                        execute()
-                        break
-                    except ModuleNotFoundError as e:
-                        modulo = e.name
-                        if modulo in modulos_tentados:
-                            raise e
-
-                        modulos_tentados.add(modulo)
-
-                        res = subprocess.run(
-                                    [sys.executable, "-m", "pip", "install", modulo],
-                                    stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.DEVNULL
-                                )
-                        if res.returncode != 0:
-                            raise e
-                    except Exception as e:
-                        raise e
-                """.formatted(request.code().indent(4));
-
-
-
-
-            Files.writeString(tempFile, scriptComWrapper);
-
-            logger.info("Arquivo temporario criado");
-
-            ProcessBuilder pb = new ProcessBuilder("python", tempFile.toAbsolutePath().toString());
-            Process process = pb.start();
-
-            logger.info("Script executado");
-
-            BufferedReader stdOut = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            StringBuilder output = new StringBuilder();
-            String line;
-            while ((line = stdOut.readLine()) != null) {
-                output.append(line).append("\n");
+            if (response == null) {
+                return new PythonResponse("", "O runner Python não retornou resposta", null, false, false);
             }
 
-            BufferedReader stdErr = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-            StringBuilder error = new StringBuilder();
-            while((line = stdErr.readLine()) != null) {
-                error.append(line).append("\n");
-            }
-
-            process.waitFor();
-
-            logger.info("Resultado: " + output);
-            logger.info("Erro: " + error);
-
-            Files.deleteIfExists(tempFile);
-
-            logger.info("Arquivo temporario apagado, devolvendo o resultado/erro para o Gemini");
-
-            return new PythonResponse(output.toString().trim(), error.toString().trim());
-        } catch (Exception e) {
-            logger.error("Erro ao executar script: " + e.getMessage(), e);
-            return new PythonResponse("", "Erro ao executar script: " + e.getMessage());
+            LOGGER.info(
+                    "Execução Python concluída: exitCode={}, timedOut={}, truncated={}, outputLength={}, errorLength={}",
+                    response.exitCode(),
+                    response.timedOut(),
+                    response.truncated(),
+                    response.output() == null ? 0 : response.output().length(),
+                    response.error() == null ? 0 : response.error().length()
+            );
+            return response;
+        } catch (RestClientException exception) {
+            LOGGER.error("Falha na comunicação com o runner Python", exception);
+            return new PythonResponse(
+                    "",
+                    "O ambiente de cálculo Python está temporariamente indisponível",
+                    null,
+                    false,
+                    false
+            );
         }
     }
-    
-    
 }

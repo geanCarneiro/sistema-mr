@@ -18,8 +18,15 @@ describe('ChatComponent', () => {
           useValue: {
             messages: signal([]),
             loading: signal(false),
+            files: signal([]),
+            uploading: signal(false),
+            uploadError: signal(null),
             carregarHistorico: vi.fn(),
+            carregarArquivos: vi.fn(),
             enviar: vi.fn(),
+            enviarArquivos: vi.fn(),
+            removerArquivo: vi.fn(),
+            baixarArquivo: vi.fn(),
           },
         },
         {

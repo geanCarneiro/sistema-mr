@@ -42,6 +42,9 @@ services:
       GOOGLE_API_CLIENT_ID: ${GOOGLE_API_CLIENT_ID}
       JWT_SECRET: ${JWT_SECRET}
       PYTHON_RUNNER_URL: http://python-runner:8081
+      FILE_STORAGE_ROOT: /app/data/files
+    volumes:
+      - file_data:/app/data/files
     depends_on:
       neo4j:
         condition: service_healthy
@@ -108,6 +111,7 @@ services:
 volumes:
   neo4j_data:
   neo4j_logs:
+  file_data:
 
 networks:
   application:

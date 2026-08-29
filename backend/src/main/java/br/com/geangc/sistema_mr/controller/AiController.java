@@ -5,7 +5,9 @@
 package br.com.geangc.sistema_mr.controller;
 
 import br.com.geangc.sistema_mr.configuration.SanitizedNeo4jChatMemoryRepository;
+import br.com.geangc.sistema_mr.configuration.TransactionalChatMemoryAdvisor;
 import br.com.geangc.sistema_mr.controller.dto.ChatMessageDto;
+import br.com.geangc.sistema_mr.service.GroundingContextService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -13,6 +15,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -37,27 +40,33 @@ public class AiController {
     
     private final ChatClient chatClient;
     private final SanitizedNeo4jChatMemoryRepository chatMemoryRepository;
+    private final GroundingContextService groundingContextService;
     
     public AiController(
             final ChatClient chatClient,
-            final SanitizedNeo4jChatMemoryRepository chatMemoryRepository
+            final SanitizedNeo4jChatMemoryRepository chatMemoryRepository,
+            final GroundingContextService groundingContextService
     ) {
         this.chatClient = chatClient;
         this.chatMemoryRepository = chatMemoryRepository;
+        this.groundingContextService = groundingContextService;
     }
     
         // DTO de requisição
     public record ChatRequestDTO(
         @NotBlank(message = "O prompt não pode ser vazio")
         @Size(max = 32_000, message = "O prompt excede o limite de 32000 caracteres")
-        String prompt
+        String prompt,
+        @Size(max = 10, message = "Selecione no máximo 10 anexos")
+        List<UUID> attachmentIds
     ) {}
 
     // DTO de resposta
     public record ChatResponseDTO(
         String content,
         Instant timestamp,
-        String messageType
+        String messageType,
+        List<GroundingContextService.GroundingFile> groundingFiles
     ) {}
     
     @PostMapping
@@ -66,10 +75,18 @@ public class AiController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         String conversationId = conversationIdFor(jwt.getSubject());
+        var prepared = groundingContextService.prepare(
+                conversationId,
+                jwt.getSubject(),
+                request.prompt(),
+                request.attachmentIds()
+        );
 
         ChatResponse chatResponse = chatClient.prompt()
-                .user(request.prompt())
-                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .user(prepared.modelPrompt())
+                .advisors(advisor -> advisor
+                        .param(ChatMemory.CONVERSATION_ID, conversationId)
+                        .param(TransactionalChatMemoryAdvisor.RAW_USER_PROMPT, request.prompt()))
                 .call()
                 .chatResponse();
 
@@ -85,7 +102,8 @@ public class AiController {
         ChatResponseDTO responseDTO = new ChatResponseDTO(
                 content,
                 timestampFrom(assistantMessage),
-                "ASSISTANT"
+                "ASSISTANT",
+                prepared.files()
         );
 
         return ResponseEntity.ok(responseDTO);

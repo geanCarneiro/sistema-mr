@@ -1,2 +1,3 @@
 .env
 python-runner/__pycache__/
+backend/data/

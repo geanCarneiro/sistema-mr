@@ -3,4 +3,5 @@ export interface IChatMessage {
   timestamp?: string;
   content?: string;
   notValid?: boolean;
+  attachments?: string[];
 }

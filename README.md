@@ -5,14 +5,16 @@ Assistente com autenticação Google, JWT próprio, Gemini, memória de conversa
 ## Arquitetura
 
 ```text
-Angular/Nginx ── JWT ──> Spring Boot ──> Gemini
+Angular/Nginx ── JWT ──> Spring Boot ──> Gemini (chat + embeddings)
                             │
-                            ├──────────> Neo4j (memória)
-                            │
+                            ├──────────> Neo4j (memória + índice de chunks)
+                            ├──────────> Volume de arquivos (original + contexto Markdown)
                             └──────────> Python Runner isolado
 ```
 
 O backend deriva o identificador da conversa do `sub` autenticado no JWT. O cliente não escolhe nem envia IDs de conversa.
+
+Os arquivos enviados são processados em segundo plano. O original fica preservado para download; Tika e Tesseract (`por+eng`) produzem uma versão textual separada. Os embeddings dos chunks localizam os arquivos relevantes, mas o chat recebe a versão textual integral de cada arquivo selecionado (parent-document retrieval). O modelo de chat permanece `gemini-3.1-flash-lite`; embeddings usam `gemini-embedding-2` com 768 dimensões.
 
 O Python Runner não recebe credenciais do backend, opera em uma rede dedicada, bloqueia novas conexões de saída e limita tempo, saída, processos, CPU e memória. A porta de desenvolvimento é publicada somente em `127.0.0.1`. As bibliotecas científicas são instaladas em versões fixas durante a criação da imagem; não há instalação dinâmica de pacotes durante uma conversa.
 
@@ -37,6 +39,7 @@ Pré-requisitos:
 
 - Java 21;
 - Node.js 22 e npm 10;
+- Tesseract OCR com os idiomas português e inglês, caso o backend seja executado fora do Docker;
 - Docker apenas para Neo4j e para preservar o isolamento do Python Runner.
 
 Inicie somente o Neo4j quando necessário:
@@ -73,14 +76,21 @@ O proxy de desenvolvimento preserva o prefixo `/api` e encaminha as chamadas par
 | `POST` | `/api/v1/auth/google` | Troca um Google ID Token por JWT da aplicação |
 | `POST` | `/api/ai/chat` | Envia uma mensagem na conversa do usuário autenticado |
 | `GET` | `/api/ai/chat/history` | Recupera o histórico do usuário autenticado |
+| `POST` | `/api/ai/chat/files` | Envia até 10 arquivos em `multipart/form-data` (`files`) |
+| `GET` | `/api/ai/chat/files` | Lista arquivos e o estado do processamento assíncrono |
+| `GET` | `/api/ai/chat/files/{id}/download` | Baixa o arquivo original |
+| `DELETE` | `/api/ai/chat/files/{id}` | Remove original, contexto e chunks |
 
-O corpo do chat contém somente o prompt:
+O corpo do chat contém o prompt e, opcionalmente, os IDs de arquivos prontos que devem ser incluídos obrigatoriamente:
 
 ```json
 {
-  "prompt": "Calcule a média e o desvio padrão de 10, 20, 30 e 40"
+  "prompt": "Resuma os pontos de divergência entre os anexos",
+  "attachmentIds": ["5e445a17-5ce8-4aec-8c0a-e3a49db22355"]
 }
 ```
+
+Mesmo sem anexos explícitos, arquivos prontos da conversa podem ser recuperados semanticamente. Os limites, idioma do OCR, orçamento de contexto e modelo de embedding ficam em `app.documents` no `application.yaml`. A instrução de sistema fica em `backend/src/main/resources/prompts/system-instruction.md`.
 
 ## Validação local
 

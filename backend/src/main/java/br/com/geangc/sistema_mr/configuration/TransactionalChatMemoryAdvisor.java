@@ -30,6 +30,8 @@ import org.springframework.ai.chat.prompt.Prompt;
  */
 public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
 
+    public static final String RAW_USER_PROMPT = "raw-user-prompt";
+
     private final Logger logger = LoggerFactory.getLogger(TransactionalChatMemoryAdvisor.class);
     
     private final ChatMemory chatMemory;
@@ -50,8 +52,9 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
         UserMessage updatedUserMessage = null;
 
         if (currentUserMessage != null && currentUserMessage.getText() != null) {
-            String rawPrompt = currentUserMessage.getText();
-            String formattedUserPrompt = String.format("[%s] %s", userTime, rawPrompt);
+            String modelPrompt = currentUserMessage.getText();
+            String rawPrompt = (String) chatClientRequest.context().getOrDefault(RAW_USER_PROMPT, modelPrompt);
+            String formattedUserPrompt = String.format("[%s] %s", userTime, modelPrompt);
 
             Map<String, Object> userMetadata = Map.of(
                     "timestamp", userTime,

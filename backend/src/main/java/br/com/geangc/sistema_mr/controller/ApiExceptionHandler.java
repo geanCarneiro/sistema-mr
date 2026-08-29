@@ -2,6 +2,8 @@ package br.com.geangc.sistema_mr.controller;
 
 import java.time.Instant;
 import java.util.UUID;
+import br.com.geangc.sistema_mr.service.DocumentNotFoundException;
+import br.com.geangc.sistema_mr.service.GroundingContextLimitException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -9,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -30,6 +33,24 @@ public class ApiExceptionHandler {
     public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException exception) {
         return ResponseEntity.badRequest()
                 .body(new ApiError(exception.getMessage(), Instant.now(), null));
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ResponseEntity<ApiError> handleNotFound(DocumentNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError(exception.getMessage(), Instant.now(), null));
+    }
+
+    @ExceptionHandler(GroundingContextLimitException.class)
+    public ResponseEntity<ApiError> handleContextLimit(GroundingContextLimitException exception) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ApiError(exception.getMessage(), Instant.now(), null));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleUploadLimit(MaxUploadSizeExceededException exception) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiError("O envio excede o limite de tamanho configurado", Instant.now(), null));
     }
 
     @ExceptionHandler(Exception.class)

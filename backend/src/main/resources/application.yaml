@@ -16,6 +16,9 @@ spring:
         api-key: ${GEMINI_API_KEY}
         embedding:
           api-key: ${GEMINI_API_KEY}
+          text:
+            model: gemini-embedding-2
+            dimensions: 768
         chat:
           model: gemini-3.1-flash-lite
           temperature: 0.3
@@ -28,6 +31,11 @@ spring:
     authentication:
       username: neo4j
       password: ${PASSWD_NEO4J}
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 200MB
 
 #logging:
 #  level:
@@ -53,3 +61,22 @@ google:
 python:
   runner:
     url: ${PYTHON_RUNNER_URL:http://localhost:8081}
+
+app:
+  documents:
+    storage-root: ${FILE_STORAGE_ROOT:./data/files}
+    max-files-per-upload: 10
+    max-file-size-bytes: 20971520
+    chunk-size: 800
+    max-chunks: 1000
+    embedding-batch-size: 20
+    embedding-model: gemini-embedding-2
+    embedding-dimensions: 768
+    retrieval-candidates: 100
+    retrieval-file-limit: 3
+    similarity-threshold: 0.60
+    context-token-budget: 200000
+    ocr:
+      enabled: true
+      languages: por+eng
+      timeout-seconds: 120

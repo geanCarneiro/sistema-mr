@@ -40,7 +40,8 @@ public class GroundingContextService {
             String conversationId,
             String ownerSubject,
             String userPrompt,
-            List<UUID> requestedIds
+            List<UUID> requestedIds,
+            boolean includeRelatedFiles
     ) {
         List<UUID> explicitIds = requestedIds == null ? List.of() : requestedIds.stream().distinct().toList();
         List<ChatFile> explicitFiles = repository.findReadyOwnedByIds(explicitIds, conversationId, ownerSubject);
@@ -51,7 +52,8 @@ public class GroundingContextService {
         Map<UUID, SelectedFile> selected = new LinkedHashMap<>();
         explicitFiles.forEach(file -> selected.put(file.id(), new SelectedFile(file, true, null)));
 
-        if (repository.hasReadyFiles(conversationId, ownerSubject)) {
+        if ((explicitIds.isEmpty() || includeRelatedFiles)
+                && repository.hasReadyFiles(conversationId, ownerSubject)) {
             try {
                 repository.searchReadyFiles(
                         conversationId,

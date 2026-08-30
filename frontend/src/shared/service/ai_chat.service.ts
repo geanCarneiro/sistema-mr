@@ -23,7 +23,7 @@ export class AiChatService {
 
   constructor(private readonly http: HttpClient) {}
 
-  public enviar(prompt: string, attachmentIds: string[] = []): void {
+  public enviar(prompt: string, attachmentIds: string[] = [], includeRelatedFiles = false): void {
     prompt = prompt?.trim();
     if (!prompt || this.loading()) return;
 
@@ -45,7 +45,7 @@ export class AiChatService {
     this.loading.set(true);
 
     // Payload enviado ao back-end
-    const payload = { prompt, attachmentIds };
+    const payload = { prompt, attachmentIds, includeRelatedFiles };
 
     this.http
       .post<IChatResponse>(this.urlBase, payload)
@@ -80,14 +80,12 @@ export class AiChatService {
   }
 
   public carregarHistorico(): void {
-    this.http
-      .get<IChatMessage[]>(`${this.urlBase}/history`)
-      .subscribe({
-        next: (data) => {
-          this.messages.set(data);
-        },
-        error: (err) => console.error('Error ao carregar historico', err),
-      });
+    this.http.get<IChatMessage[]>(`${this.urlBase}/history`).subscribe({
+      next: (data) => {
+        this.messages.set(data);
+      },
+      error: (err) => console.error('Error ao carregar historico', err),
+    });
   }
 
   public carregarArquivos(): void {

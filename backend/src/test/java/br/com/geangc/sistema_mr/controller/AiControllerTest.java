@@ -3,8 +3,10 @@ package br.com.geangc.sistema_mr.controller;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AiControllerTest {
 
@@ -20,5 +22,14 @@ class AiControllerTest {
     @Test
     void conversationIdRejectsMissingSubject() {
         assertThrows(IllegalArgumentException.class, () -> AiController.conversationIdFor(" "));
+    }
+
+    @Test
+    void relatedFileSearchIsOptInAndBackwardCompatible() {
+        var legacyRequest = new AiController.ChatRequestDTO("Pergunta", null, null);
+        var hybridRequest = new AiController.ChatRequestDTO("Pergunta", null, true);
+
+        assertFalse(legacyRequest.shouldIncludeRelatedFiles());
+        assertTrue(hybridRequest.shouldIncludeRelatedFiles());
     }
 }

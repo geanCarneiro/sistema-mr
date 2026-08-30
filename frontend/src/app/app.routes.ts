@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { LoginComponent } from './login/login';
-import { ChatComponent } from './chat-component/chat-component';
+import { ChatComponent } from './chat-component/chat.component';
 import { authGuard } from '../shared/guard/auth.guard';
 import { redirectIfAuthenticatedGuard } from '../shared/guard/redirectIfAuthenticated';
 
@@ -13,16 +13,15 @@ export const routes: Routes = [
   {
     path: 'login',
     canActivate: [redirectIfAuthenticatedGuard],
-    component: LoginComponent
+    component: LoginComponent,
   },
   {
     path: 'chat',
     canActivate: [authGuard],
-    component: ChatComponent
+    component: ChatComponent,
   },
   {
     path: '**',
-    redirectTo: 'chat'
-  }
-
+    redirectTo: 'chat',
+  },
 ];

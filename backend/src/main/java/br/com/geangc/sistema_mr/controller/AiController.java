@@ -58,8 +58,13 @@ public class AiController {
         @Size(max = 32_000, message = "O prompt excede o limite de 32000 caracteres")
         String prompt,
         @Size(max = 10, message = "Selecione no máximo 10 anexos")
-        List<UUID> attachmentIds
-    ) {}
+        List<UUID> attachmentIds,
+        Boolean includeRelatedFiles
+    ) {
+        boolean shouldIncludeRelatedFiles() {
+            return Boolean.TRUE.equals(includeRelatedFiles);
+        }
+    }
 
     // DTO de resposta
     public record ChatResponseDTO(
@@ -79,7 +84,8 @@ public class AiController {
                 conversationId,
                 jwt.getSubject(),
                 request.prompt(),
-                request.attachmentIds()
+                request.attachmentIds(),
+                request.shouldIncludeRelatedFiles()
         );
 
         ChatResponse chatResponse = chatClient.prompt()

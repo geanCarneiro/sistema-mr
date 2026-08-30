@@ -1,19 +1,51 @@
-import { AfterViewChecked, Component, ElementRef, OnDestroy, OnInit, signal, ViewChild, WritableSignal } from '@angular/core';
+import {
+  AfterViewChecked,
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  signal,
+  ViewChild,
+  WritableSignal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AiChatService } from '../../shared/service/ai_chat.service';
 import { IChatMessage } from '../../shared/interface/chat_message.interface';
 import { AuthService, IUserData } from '../../shared/service/auth.service';
 import { IChatFile } from '../../shared/interface/chat_file.interface';
+import { ButtonDirective, ButtonIcon } from 'primeng/button';
+import { Checkbox } from 'primeng/checkbox';
+import { Plus } from '@primeicons/angular/plus';
+import { Refresh } from '@primeicons/angular/refresh';
+import { CloudDownload } from '@primeicons/angular/cloud-download';
+import { Trash } from '@primeicons/angular/trash';
+import { Times } from '@primeicons/angular/times';
+import { Paperclip } from '@primeicons/angular/paperclip';
 
 @Component({
   selector: 'app-chat-component',
-  imports: [CommonModule, FormsModule],
-  templateUrl: './chat-component.html',
-  styleUrl: './chat-component.scss',
+  imports: [
+    CommonModule,
+    FormsModule,
+    ButtonDirective,
+    ButtonIcon,
+    Checkbox,
+    Plus,
+    Refresh,
+    CloudDownload,
+    Trash,
+    Times,
+    Paperclip,
+  ],
+  templateUrl: './chat.component.html',
+  styleUrl: './chat.component.scss',
 })
 export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef<HTMLElement>;
+  @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
+
+  private static readonly MAX_SELECTED_FILES = 10;
 
   messages: WritableSignal<IChatMessage[]>;
   prompt = signal<string>('');
@@ -22,6 +54,8 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   uploading: WritableSignal<boolean>;
   uploadError: WritableSignal<string | null>;
   selectedFileIds = signal<string[]>([]);
+  includeRelatedFiles = signal(false);
+  selectionError = signal<string | null>(null);
   userData: IUserData | null;
   private renderedMessageCount = -1;
   private filePolling?: ReturnType<typeof setInterval>;
@@ -64,9 +98,16 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   enviar() {
-    this.aiChatService.enviar(this.prompt(), this.selectedFileIds());
+    const prompt = this.prompt().trim();
+    if (!prompt || this.loading()) return;
+
+    this.aiChatService.enviar(prompt, this.selectedFileIds(), this.includeRelatedFiles());
     this.prompt.set('');
-    this.selectedFileIds.set([]);
+    this.limparSelecao();
+  }
+
+  abrirSeletorDeArquivos(): void {
+    if (!this.uploading()) this.fileInput?.nativeElement.click();
   }
 
   selecionarArquivos(event: Event): void {
@@ -77,13 +118,37 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   alternarAnexo(file: IChatFile): void {
     if (file.status !== 'READY') return;
-    this.selectedFileIds.update((ids) =>
-      ids.includes(file.id) ? ids.filter((id) => id !== file.id) : [...ids, file.id],
-    );
+
+    const selectedIds = this.selectedFileIds();
+    if (selectedIds.includes(file.id)) {
+      const remainingIds = selectedIds.filter((id) => id !== file.id);
+      this.selectedFileIds.set(remainingIds);
+      this.selectionError.set(null);
+      if (!remainingIds.length) this.includeRelatedFiles.set(false);
+      return;
+    }
+
+    if (selectedIds.length >= ChatComponent.MAX_SELECTED_FILES) {
+      this.selectionError.set(`Selecione no máximo ${ChatComponent.MAX_SELECTED_FILES} anexos.`);
+      return;
+    }
+
+    this.selectedFileIds.set([...selectedIds, file.id]);
+    this.selectionError.set(null);
   }
 
   anexoSelecionado(id: string): boolean {
     return this.selectedFileIds().includes(id);
+  }
+
+  definirBuscaRelacionada(checked: boolean): void {
+    this.includeRelatedFiles.set(this.selectedFileIds().length > 0 && checked);
+  }
+
+  limparSelecao(): void {
+    this.selectedFileIds.set([]);
+    this.includeRelatedFiles.set(false);
+    this.selectionError.set(null);
   }
 
   baixarArquivo(file: IChatFile): void {
@@ -91,7 +156,9 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   removerArquivo(file: IChatFile): void {
-    this.selectedFileIds.update((ids) => ids.filter((id) => id !== file.id));
+    const remainingIds = this.selectedFileIds().filter((id) => id !== file.id);
+    this.selectedFileIds.set(remainingIds);
+    if (!remainingIds.length) this.includeRelatedFiles.set(false);
     this.aiChatService.removerArquivo(file.id);
   }
 

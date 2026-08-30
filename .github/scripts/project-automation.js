@@ -25,7 +25,6 @@ const FIELD_DEFINITIONS = [
     dataType: 'SINGLE_SELECT',
     options: [
       option('Backlog', 'GRAY', 'Item recebido e ainda não refinado'),
-      option('Ready', 'BLUE', 'Pronto para iniciar'),
       option('In Progress', 'YELLOW', 'Implementação em andamento'),
       option('Review', 'PURPLE', 'Aguardando revisão ou validação'),
       option('Done', 'GREEN', 'Trabalho concluído'),
@@ -68,7 +67,6 @@ const FIELD_DEFINITIONS = [
 
 const STATUS_ALIASES = {
   Backlog: ['Backlog', 'Todo'],
-  Ready: ['Ready'],
   'In Progress': ['In Progress', 'In progress'],
   Review: ['Review', 'In Review', 'In review'],
   Done: ['Done'],
@@ -76,7 +74,6 @@ const STATUS_ALIASES = {
 
 const COMMAND_STATUSES = {
   '/backlog': 'Backlog',
-  '/ready': 'Ready',
   '/start': 'In Progress',
   '/review': 'Review',
   '/done': 'Done',
@@ -611,7 +608,9 @@ module.exports = async ({ github, context, core }) => {
 };
 
 module.exports.testables = {
+  COMMAND_STATUSES,
   FIELD_DEFINITIONS,
+  STATUS_ALIASES,
   WORK_TYPE_FIELD,
   fieldClearedByIssueEvent,
   findOption,

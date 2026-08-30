@@ -60,7 +60,6 @@ Em uma Issue rastreada, publique um comentário contendo um dos comandos:
 | Comando | Status no Project |
 |---|---|
 | `/backlog` | Backlog, ou Todo quando o template usa esse nome |
-| `/ready` | Ready |
 | `/start` | In Progress |
 | `/review` | Review, ou In review quando o template usa esse nome |
 | `/done` | Done e fecha a Issue |

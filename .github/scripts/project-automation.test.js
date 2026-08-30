@@ -52,6 +52,29 @@ test('maps Issue lifecycle to Project status', () => {
   assert.equal(testables.statusForIssueAction('edited'), null);
 });
 
+test('defines the Project workflow without a Ready status', () => {
+  const statusDefinition = testables.FIELD_DEFINITIONS.find(
+    (candidate) => candidate.name === 'Status',
+  );
+
+  assert.deepEqual(
+    statusDefinition.options.map((option) => option.name),
+    ['Backlog', 'In Progress', 'Review', 'Done'],
+  );
+  assert.deepEqual(testables.STATUS_ALIASES, {
+    Backlog: ['Backlog', 'Todo'],
+    'In Progress': ['In Progress', 'In progress'],
+    Review: ['Review', 'In Review', 'In review'],
+    Done: ['Done'],
+  });
+  assert.deepEqual(testables.COMMAND_STATUSES, {
+    '/backlog': 'Backlog',
+    '/start': 'In Progress',
+    '/review': 'Review',
+    '/done': 'Done',
+  });
+});
+
 test('maps pull request lifecycle to Project status', () => {
   assert.equal(testables.statusForPullRequest({ draft: true }, 'opened'), 'In Progress');
   assert.equal(testables.statusForPullRequest({ draft: false }, 'opened'), 'Review');

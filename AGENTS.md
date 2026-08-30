@@ -1,5 +1,22 @@
 # Instruções para agentes
 
+## Fases de trabalho e autorização
+
+- Por padrão, discussões sobre requisitos, arquitetura, implementação, bugs,
+  refatorações e possíveis mudanças permanecem na fase de debate.
+- Na fase de debate, investigue o repositório, esclareça comportamentos, compare
+  alternativas e proponha um plano, mas não altere arquivos, dependências,
+  configuração, schemas, dados ou serviços.
+- Durante o debate, faça somente alterações que o usuário solicitar de forma
+  específica e explícita. Uma autorização pontual vale apenas para a ação ou para
+  os arquivos nomeados e não inicia a fase de execução do restante do trabalho.
+- Inicie a fase de execução somente quando o usuário autorizar explicitamente a
+  implementação do escopo debatido.
+- Na fase de execução, implemente apenas o que foi acordado. Se surgir uma mudança
+  materialmente diferente ou fora do escopo, explique-a e aguarde nova autorização.
+- O usuário pode acompanhar a execução e corrigir a rota; incorpore essas correções
+  sem ampliar implicitamente o escopo autorizado.
+
 ## Ambiente de desenvolvimento local
 
 - Considere este repositório um ambiente de desenvolvimento local.
@@ -23,8 +40,8 @@
 - As labels são a fonte de verdade para `Work Type`, `Area` e `Priority`; a automação
   copia esses valores para o Project. Elas podem aparecer alguns segundos depois da
   criação da Issue.
-- Use comentários para transições solicitadas: `/backlog`, `/ready`, `/start`,
-  `/review` e `/done`. O último comando também fecha a Issue.
+- Use comentários para transições solicitadas: `/backlog`, `/start`, `/review`
+  e `/done`. O último comando também fecha a Issue.
 - Ao criar uma PR para uma Issue, inclua `Closes #<numero>` no corpo. O fluxo move a
   Issue para `In Progress`, `Review` ou `Done` conforme o estado da PR.
 - Para uma Issue antiga, adicione `tracked` e as labels de classificação. Se precisar

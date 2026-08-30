@@ -7,11 +7,11 @@ Este repositório sincroniza Issues com o Project pessoal
 
 - os Issue Forms aplicam `tracked`, tipo, área e prioridade;
 - Issues com `tracked` são adicionadas ao Project;
-- `Priority`, `Type` e `Area` são derivados das labels e copiados para o Project;
+- `Priority`, `Work Type` e `Area` são derivados das labels e copiados para o Project;
 - Issues novas ou reabertas entram no backlog;
 - comandos em comentários alteram o `Status`;
 - PRs vinculadas por `Closes #123` movem a Issue para implementação, revisão ou conclusão;
-- o bootstrap cria labels e os campos ausentes `Status`, `Priority`, `Type`, `Area` e `Estimate`.
+- o bootstrap cria labels e os campos ausentes `Status`, `Priority`, `Work Type`, `Area` e `Estimate`.
 
 ## Configuração inicial obrigatória
 
@@ -101,7 +101,7 @@ Isso é útil para migrar uma Issue antiga. Ela precisa ter a label `tracked`.
 
 ## Regras de fonte de verdade
 
-- `Type`, `Area` e `Priority` têm as labels como fonte de verdade;
+- `Work Type`, `Area` e `Priority` têm as labels como fonte de verdade;
 - `Status` tem o campo do Project como fonte de verdade;
 - Issues e PRs continuam sendo a fonte de verdade para título, responsável,
   labels, fechamento e vínculo entre implementação e demanda;

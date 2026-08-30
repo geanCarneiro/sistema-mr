@@ -77,3 +77,17 @@ test('accepts default template aliases for Status', () => {
   assert.equal(testables.findOption(field, 'Review').id, 'review');
   assert.equal(testables.findOption(field, 'Done').id, 'done');
 });
+
+test('uses a non-reserved custom field for work type', () => {
+  const definition = testables.FIELD_DEFINITIONS.find(
+    (candidate) => candidate.name === testables.WORK_TYPE_FIELD,
+  );
+
+  assert.equal(testables.WORK_TYPE_FIELD, 'Work Type');
+  assert.ok(definition);
+  assert.equal(definition.dataType, 'SINGLE_SELECT');
+  assert.deepEqual(
+    testables.fieldClearedByIssueEvent({ action: 'unlabeled', label: { name: 'type:bug' } }),
+    ['Work Type'],
+  );
+});

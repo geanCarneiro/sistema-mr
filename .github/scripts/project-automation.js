@@ -17,6 +17,8 @@ const LABEL_DEFINITIONS = [
   { name: 'priority:p3', color: 'C2E0C6', description: 'Baixa prioridade' },
 ];
 
+const WORK_TYPE_FIELD = 'Work Type';
+
 const FIELD_DEFINITIONS = [
   {
     name: 'Status',
@@ -40,7 +42,7 @@ const FIELD_DEFINITIONS = [
     ],
   },
   {
-    name: 'Type',
+    name: WORK_TYPE_FIELD,
     dataType: 'SINGLE_SELECT',
     options: [
       option('Feature', 'BLUE', 'Funcionalidade ou evolução'),
@@ -240,7 +242,12 @@ async function ensureProjectSchema(github, login, number, core) {
     const field = project.fields.nodes.find((candidate) => normalize(candidate?.name) === normalize(definition.name));
 
     if (!field) {
-      await createProjectField(github, project.id, definition);
+      core.info(`Criando campo no Project: ${definition.name}`);
+      try {
+        await createProjectField(github, project.id, definition);
+      } catch (error) {
+        throw new Error(`Falha ao criar o campo ${definition.name} no Project: ${error.message}`, { cause: error });
+      }
       core.info(`Campo criado no Project: ${definition.name}`);
       project = await getProject(github, login, number);
       continue;
@@ -406,7 +413,7 @@ async function synchronizeIssue(github, project, issue, requestedStatus, core, f
       }),
     },
     {
-      field: 'Type',
+      field: WORK_TYPE_FIELD,
       value: optionFromLabels(names, 'type', {
         'type:feature': 'Feature',
         'type:bug': 'Bug',
@@ -461,7 +468,7 @@ function fieldClearedByIssueEvent(payload) {
   if (payload.action !== 'unlabeled') return [];
   const removed = normalize(payload.label?.name);
   if (removed.startsWith('priority:')) return ['Priority'];
-  if (removed.startsWith('type:')) return ['Type'];
+  if (removed.startsWith('type:')) return [WORK_TYPE_FIELD];
   if (removed.startsWith('area:')) return ['Area'];
   return [];
 }
@@ -604,6 +611,9 @@ module.exports = async ({ github, context, core }) => {
 };
 
 module.exports.testables = {
+  FIELD_DEFINITIONS,
+  WORK_TYPE_FIELD,
+  fieldClearedByIssueEvent,
   findOption,
   formValue,
   inferArea,

@@ -20,8 +20,9 @@ public record DocumentProperties(
         Ocr ocr
 ) {
     public record Ocr(
-            boolean enabled,
-            String languages,
-            int timeoutSeconds
+            String serviceUrl,
+            int timeoutSeconds,
+            int minimumTextCharacters,
+            double minimumMeanConfidence
     ) {}
 }

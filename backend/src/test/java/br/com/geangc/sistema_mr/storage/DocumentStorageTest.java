@@ -50,7 +50,7 @@ class DocumentStorageTest {
         return new DocumentProperties(
                 root, 10, 20 * 1024 * 1024, 800, 1000, 20,
                 "gemini-embedding-2", 768, 100, 3, .6, 200_000,
-                new DocumentProperties.Ocr(true, "por+eng", 120)
+                new DocumentProperties.Ocr("http://127.0.0.1:8082", 120, 12, .55)
         );
     }
 }

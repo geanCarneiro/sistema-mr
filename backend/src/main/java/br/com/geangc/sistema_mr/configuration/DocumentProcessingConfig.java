@@ -9,7 +9,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 @Configuration
 @EnableAsync
-@EnableConfigurationProperties(DocumentProperties.class)
+@EnableConfigurationProperties({DocumentProperties.class, DocumentVisionProperties.class})
 public class DocumentProcessingConfig {
 
     @Bean("documentTaskExecutor")

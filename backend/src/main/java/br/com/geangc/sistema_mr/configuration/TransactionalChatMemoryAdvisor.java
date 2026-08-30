@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -30,7 +31,7 @@ import org.springframework.ai.chat.prompt.Prompt;
  */
 public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
 
-    public static final String RAW_USER_PROMPT = "raw-user-prompt";
+    public static final String ORIGINAL_USER_PROMPT = "original-user-prompt";
 
     private final Logger logger = LoggerFactory.getLogger(TransactionalChatMemoryAdvisor.class);
     
@@ -49,20 +50,18 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
 
         // Pega a mensagem de usuário caso ela exista no prompt original
         UserMessage currentUserMessage = chatClientRequest.prompt().getUserMessage();
-        UserMessage updatedUserMessage = null;
+        UserMessage modelUserMessage = null;
+        UserMessage persistedUserMessage = null;
 
         if (currentUserMessage != null && currentUserMessage.getText() != null) {
             String modelPrompt = currentUserMessage.getText();
-            String rawPrompt = (String) chatClientRequest.context().getOrDefault(RAW_USER_PROMPT, modelPrompt);
-            String formattedUserPrompt = String.format("[%s] %s", userTime, modelPrompt);
+            String originalPrompt = (String) chatClientRequest.context()
+                    .getOrDefault(ORIGINAL_USER_PROMPT, modelPrompt);
 
-            Map<String, Object> userMetadata = Map.of(
-                    "timestamp", userTime,
-                    "rawContent", rawPrompt
-            );
-            updatedUserMessage = UserMessage.builder()
-                    .text(formattedUserPrompt)
-                    .metadata(userMetadata)
+            persistedUserMessage = canonicalUserMessage(originalPrompt, userTime);
+            modelUserMessage = UserMessage.builder()
+                    .text(formatForModel(modelPrompt, userTime))
+                    .metadata(Map.of("timestamp", userTime))
                     .build();
         }
 
@@ -85,11 +84,13 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
                     .forEach(fullInstructions::add);
 
             // 2. Histórico da conversa recuperado do banco
-            fullInstructions.addAll(history);
+            history.stream()
+                    .map(TransactionalChatMemoryAdvisor::messageForModel)
+                    .forEach(fullInstructions::add);
 
             // 3. Mensagem do usuário atual
-            if (updatedUserMessage != null) {
-                fullInstructions.add(updatedUserMessage);
+            if (modelUserMessage != null) {
+                fullInstructions.add(modelUserMessage);
             }
 
             Prompt newPrompt = new Prompt(fullInstructions, chatClientRequest.prompt().getOptions());
@@ -108,8 +109,8 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
             }
 
             // Grava as mensagens no histórico somente na resposta final do texto
-            if (updatedUserMessage != null) {
-                chatMemory.add(conversationId, updatedUserMessage);
+            if (persistedUserMessage != null) {
+                chatMemory.add(conversationId, persistedUserMessage);
             }
 
             String assistantTime = Instant.now().toString();
@@ -118,10 +119,10 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
             String rawResponse = resp.getResult().getOutput().getText();
             if (rawResponse != null && !rawResponse.isBlank()) {
                 assistantMetadata.put("timestamp", assistantTime);
-                assistantMetadata.put("rawContent", rawResponse);
+                assistantMetadata.remove("rawContent");
 
                 AssistantMessage assistantMessage = AssistantMessage.builder()
-                        .content(String.format("[%s] %s", assistantTime, rawResponse))
+                        .content(rawResponse)
                         .properties(assistantMetadata)
                         .build();
 
@@ -144,6 +145,45 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
         }
 
         return response;
+    }
+
+    static UserMessage canonicalUserMessage(String prompt, String timestamp) {
+        return UserMessage.builder()
+                .text(prompt)
+                .metadata(Map.of("timestamp", timestamp))
+                .build();
+    }
+
+    static Message messageForModel(Message message) {
+        String timestamp = Optional.ofNullable(message.getMetadata().get("timestamp"))
+                .map(Object::toString)
+                .orElse(null);
+        if (timestamp == null || timestamp.isBlank() || message.getText() == null) {
+            return message;
+        }
+
+        String canonicalText = Optional.ofNullable(message.getMetadata().get("rawContent"))
+                .map(Object::toString)
+                .orElseGet(message::getText);
+        String formattedText = formatForModel(canonicalText, timestamp);
+
+        if (message instanceof UserMessage) {
+            return UserMessage.builder()
+                    .text(formattedText)
+                    .metadata(new HashMap<>(message.getMetadata()))
+                    .build();
+        }
+        if (message instanceof AssistantMessage assistantMessage && !assistantMessage.hasToolCalls()) {
+            return AssistantMessage.builder()
+                    .content(formattedText)
+                    .properties(new HashMap<>(message.getMetadata()))
+                    .build();
+        }
+        return message;
+    }
+
+    private static String formatForModel(String content, String timestamp) {
+        return String.format("[%s] %s", timestamp, content);
     }
 
     @Override

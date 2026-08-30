@@ -9,7 +9,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ChatMessageDtoTest {
 
     @Test
-    void mapsSanitizedMessageMetadata() {
+    void mapsCanonicalMessageTextAndTimestampMetadata() {
+        UserMessage message = UserMessage.builder()
+                .text("conteúdo")
+                .metadata(Map.of("timestamp", "2026-08-28T10:00:00Z"))
+                .build();
+
+        ChatMessageDto dto = ChatMessageDto.fromMessage(message);
+
+        assertEquals("USER", dto.messageType());
+        assertEquals("2026-08-28T10:00:00Z", dto.timestamp());
+        assertEquals("conteúdo", dto.content());
+    }
+
+    @Test
+    void keepsCompatibilityWithLegacyRawContentMessages() {
         UserMessage message = UserMessage.builder()
                 .text("[2026-08-28T10:00:00Z] conteúdo")
                 .metadata(Map.of(

@@ -25,7 +25,7 @@ public record ChatMessageDto(
                         .orElse(null), 
                 Optional.ofNullable(message.getMetadata().get("rawContent"))
                         .map(Object::toString)
-                        .orElse(null)
+                        .orElseGet(message::getText)
         );
     }
     

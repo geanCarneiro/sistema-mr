@@ -1,12 +1,13 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
-  // Se a URL já for externa (ex: https://...) ou já tiver /api, deixa passar
-  if (req.url.startsWith('http') || req.url === '/api' || req.url.startsWith('/api/')) {
+  // URLs externas não passam pelo proxy local da aplicação.
+  if (req.url.startsWith('http')) {
     return next(req);
   }
 
-  // Garante a barra no início e injeta o prefixo /api
+  // Este /api é o prefixo de roteamento do frontend. O proxy remove somente
+  // essa primeira ocorrência; um /api já presente na URL pertence ao backend.
   const urlComBarra = req.url.startsWith('/') ? req.url : `/${req.url}`;
 
   const apiReq = req.clone({

@@ -63,6 +63,12 @@ python:
     url: ${PYTHON_RUNNER_URL:http://localhost:8081}
 
 app:
+  ai:
+    document-vision:
+      model: gemini-3.1-flash-lite
+      temperature: 0.0
+      thinking-level: LOW
+      max-output-tokens: 8192
   documents:
     storage-root: ${FILE_STORAGE_ROOT:./data/files}
     max-files-per-upload: 10
@@ -77,6 +83,7 @@ app:
     similarity-threshold: 0.60
     context-token-budget: 200000
     ocr:
-      enabled: true
-      languages: por+eng
+      service-url: ${OCR_SERVICE_URL:http://127.0.0.1:8082}
       timeout-seconds: 120
+      minimum-text-characters: 12
+      minimum-mean-confidence: 0.55

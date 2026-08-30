@@ -86,7 +86,7 @@ public class AiController {
                 .user(prepared.modelPrompt())
                 .advisors(advisor -> advisor
                         .param(ChatMemory.CONVERSATION_ID, conversationId)
-                        .param(TransactionalChatMemoryAdvisor.RAW_USER_PROMPT, request.prompt()))
+                        .param(TransactionalChatMemoryAdvisor.ORIGINAL_USER_PROMPT, request.prompt()))
                 .call()
                 .chatResponse();
 
@@ -95,9 +95,7 @@ public class AiController {
                 .map(result -> result.getOutput())
                 .orElseThrow(() -> new IllegalStateException("O modelo não retornou uma resposta"));
 
-        String content = Optional.ofNullable(assistantMessage.getMetadata().get("rawContent"))
-                .map(Object::toString)
-                .orElseGet(assistantMessage::getText);
+        String content = assistantMessage.getText();
 
         ChatResponseDTO responseDTO = new ChatResponseDTO(
                 content,

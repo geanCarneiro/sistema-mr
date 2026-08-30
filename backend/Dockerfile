@@ -8,8 +8,7 @@ RUN mvn clean package -DskipTests
 # Stage 2: Imagem final enxuta pra execução
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
-RUN apk add --no-cache tesseract-ocr tesseract-ocr-data-eng tesseract-ocr-data-por \
-    && addgroup -S application \
+RUN addgroup -S application \
     && adduser -S application -G application \
     && mkdir -p /app/data/files \
     && chown -R application:application /app/data

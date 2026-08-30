@@ -13,7 +13,7 @@ export interface IChatResponse {
 
 @Injectable({ providedIn: 'root' })
 export class AiChatService {
-  private readonly urlBase = '/ai/chat';
+  private readonly urlBase = '/api/ai/chat';
 
   public messages = signal<IChatMessage[]>([]);
   public loading = signal<boolean>(false);

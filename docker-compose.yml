@@ -42,6 +42,7 @@ services:
       GOOGLE_API_CLIENT_ID: ${GOOGLE_API_CLIENT_ID}
       JWT_SECRET: ${JWT_SECRET}
       PYTHON_RUNNER_URL: http://python-runner:8081
+      OCR_SERVICE_URL: http://ocr-service:8082
       FILE_STORAGE_ROOT: /app/data/files
     volumes:
       - file_data:/app/data/files
@@ -50,10 +51,13 @@ services:
         condition: service_healthy
       python-runner:
         condition: service_healthy
+      ocr-service:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - application
       - runner
+      - ocr
 
   # --------------------------------------------------------
   # 3. Frontend Angular (Nginx)
@@ -108,6 +112,37 @@ services:
     networks:
       - runner
 
+  # --------------------------------------------------------
+  # 5. OCR neural local para imagens e PDFs digitalizados
+  # --------------------------------------------------------
+  ocr-service:
+    build:
+      context: ./ocr-service
+      dockerfile: Dockerfile
+    container_name: ocr-service
+    ports:
+      - "127.0.0.1:8082:8082"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/health', timeout=2)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+    networks:
+      - ocr
+
 volumes:
   neo4j_data:
   neo4j_logs:
@@ -116,3 +151,4 @@ volumes:
 networks:
   application:
   runner:
+  ocr:

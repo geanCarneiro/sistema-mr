@@ -1,0 +1,102 @@
+name: Trabalho técnico
+description: Registre dívida técnica, investigação ou spike.
+title: "[Technical] "
+labels:
+  - tracked
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Tipo
+      options:
+        - Tech Debt
+        - Spike
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - Chat
+        - Grounding
+        - Documents
+        - OCR
+        - Frontend
+        - Infrastructure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridade
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+      default: 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual risco, limitação ou incerteza técnica motiva este trabalho?
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User story
+      value: |
+        Como mantenedor do sistema
+        Quero ...
+        Para ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requisitos funcionais
+      description: Para um spike, descreva as perguntas que precisam ser respondidas e o artefato de saída.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critérios de aceite
+      value: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-proposal
+    attributes:
+      label: Proposta técnica
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Fora de escopo
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Riscos e dependências
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Estratégia de validação
+      description: Evidências técnicas, testes, benchmark, ADR ou documentação esperada.
+    validations:
+      required: true

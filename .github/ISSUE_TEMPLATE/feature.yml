@@ -1,0 +1,108 @@
+name: Funcionalidade
+description: Proponha uma funcionalidade ou evolução do produto.
+title: "[Feature] "
+labels:
+  - tracked
+  - type:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Preencha o suficiente para que outra pessoa consiga entender, implementar e validar a proposta.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      description: Área principal afetada.
+      options:
+        - Chat
+        - Grounding
+        - Documents
+        - OCR
+        - Frontend
+        - Infrastructure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridade
+      description: P0 é incidente crítico; P3 é melhoria sem urgência.
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+      default: 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qual problema real precisa ser resolvido e para quem?
+      placeholder: Descreva o comportamento atual, a limitação e o impacto.
+    validations:
+      required: true
+
+  - type: textarea
+    id: user-story
+    attributes:
+      label: User story
+      value: |
+        Como ...
+        Quero ...
+        Para ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requisitos funcionais
+      description: Liste os comportamentos necessários, sem antecipar detalhes desnecessários de implementação.
+      placeholder: |
+        - O sistema deve ...
+        - O usuário deve conseguir ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critérios de aceite
+      value: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-proposal
+    attributes:
+      label: Proposta técnica
+      description: Opcional. Registre uma abordagem inicial, componentes envolvidos ou alternativas consideradas.
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Fora de escopo
+      description: O que esta entrega deliberadamente não deve resolver?
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Riscos e dependências
+      description: Dependências externas, decisões pendentes, migrações ou riscos conhecidos.
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Estratégia de validação
+      description: Como a implementação deverá ser testada e demonstrada?
+      placeholder: Testes unitários, integração, build, fluxo manual e evidências esperadas.
+    validations:
+      required: true

@@ -1,0 +1,112 @@
+name: Bug
+description: Registre um comportamento incorreto ou uma regressão reproduzível.
+title: "[Bug] "
+labels:
+  - tracked
+  - type:bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Não inclua tokens, senhas, dados pessoais ou conteúdo confidencial nos exemplos e logs.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - Chat
+        - Grounding
+        - Documents
+        - OCR
+        - Frontend
+        - Infrastructure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridade
+      description: P0 é incidente crítico; P3 é defeito de baixo impacto.
+      options:
+        - P0
+        - P1
+        - P2
+        - P3
+      default: 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Resuma o defeito e seu impacto.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Passos para reproduzir
+      value: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Comportamento atual
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Comportamento esperado
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidências e ambiente
+      description: Logs sanitizados, screenshots, navegador, sistema operacional, commit ou versão afetada.
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critérios de aceite
+      value: |
+        - [ ] O problema não pode mais ser reproduzido.
+        - [ ] Existe cobertura contra regressão quando aplicável.
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical-proposal
+    attributes:
+      label: Proposta técnica
+      description: Opcional. Hipótese da causa ou abordagem sugerida.
+
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Fora de escopo
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Riscos e dependências
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Estratégia de validação
+      description: Testes e verificações necessários além dos critérios de aceite.
+    validations:
+      required: true

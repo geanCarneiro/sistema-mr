@@ -162,6 +162,12 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.aiChatService.removerArquivo(file.id);
   }
 
+  reprocessarArquivo(file: IChatFile): void {
+    if (file.status === 'FAILED') {
+      this.aiChatService.reprocessarArquivo(file.id);
+    }
+  }
+
   isProcessing(file: IChatFile): boolean {
     return ['QUEUED', 'EXTRACTING', 'EMBEDDING'].includes(file.status);
   }

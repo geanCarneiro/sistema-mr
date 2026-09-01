@@ -155,13 +155,25 @@
           <label class="file-content" [for]="'file-' + file.id">
             <span class="file-name" [title]="file.name">{{ file.name }}</span>
             <span class="file-meta"
-              >{{ file.size / 1024 | number: '1.0-1' }} KB · {{ statusLabel(file.status) }}</span
+              >{{ file.size / 1024 | number: '1.0-1' }} KB · <span [class.status-failed]="file.status === 'FAILED'">{{ statusLabel(file.status) }}</span></span
             >
             @if (file.errorMessage) {
               <span class="file-error" [title]="file.errorMessage">{{ file.errorMessage }}</span>
             }
           </label>
           <div class="file-actions">
+            @if (file.status === 'FAILED') {
+              <button
+                pButton
+                type="button"
+                severity="warn"
+                [attr.aria-label]="'Reprocessar ' + file.name"
+                title="Reprocessar arquivo"
+                (click)="reprocessarArquivo(file)"
+              >
+                <svg data-p-icon="refresh" pButtonIcon aria-hidden="true"></svg>
+              </button>
+            }
             <button
               pButton
               type="button"

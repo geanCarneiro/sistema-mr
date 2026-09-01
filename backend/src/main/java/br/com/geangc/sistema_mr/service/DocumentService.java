@@ -91,6 +91,17 @@ public class DocumentService {
         }
     }
 
+    public ChatFile retry(UUID id, String conversationId, String ownerSubject) {
+        ChatFile existing = owned(id, conversationId, ownerSubject);
+        if (existing.status() != DocumentStatus.FAILED) {
+            throw new IllegalArgumentException("Apenas arquivos com status FAILED podem ser reprocessados");
+        }
+        ChatFile reset = repository.resetForRetry(id, conversationId, ownerSubject)
+                .orElseThrow(DocumentNotFoundException::new);
+        ingestionService.process(id);
+        return reset;
+    }
+
     private ChatFile store(MultipartFile upload, String conversationId, String ownerSubject) {
         validate(upload);
         UUID id = UUID.randomUUID();

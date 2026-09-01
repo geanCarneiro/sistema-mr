@@ -180,6 +180,35 @@ public class DocumentRepository {
         }
     }
 
+    public Optional<ChatFile> resetForRetry(UUID id, String conversationId, String ownerSubject) {
+        String query = """
+                MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
+                      -[:POSSUI]->(file:Arquivo {id: $id, status: 'FAILED'})
+                OPTIONAL MATCH (file)-[:CONTEM]->(chunk:Chunk)
+                DETACH DELETE chunk
+                WITH file
+                SET file.status = 'QUEUED',
+                    file.errorMessage = null,
+                    file.contextStorageKey = null,
+                    file.updatedAt = $updatedAt
+                RETURN file
+                """;
+        Map<String, Object> parameters = Map.of(
+                "id", id.toString(),
+                "conversationId", conversationId,
+                "ownerSubject", ownerSubject,
+                "updatedAt", Instant.now().toString()
+        );
+        try (var session = driver.session()) {
+            return session.executeWrite(transaction -> {
+                var result = transaction.run(query, parameters);
+                return result.hasNext()
+                        ? Optional.of(mapFile(result.next(), "file"))
+                        : Optional.empty();
+            });
+        }
+    }
+
     public void updateStatus(UUID id, DocumentStatus status, String errorMessage) {
         String query = """
                 MATCH (file:Arquivo {id: $id})

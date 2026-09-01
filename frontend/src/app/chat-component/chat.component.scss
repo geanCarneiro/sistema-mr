@@ -296,6 +296,11 @@ button {
 
   &.failed {
     border-color: #7f3434;
+
+    .status-failed {
+      color: #ff8585;
+      font-weight: bold;
+    }
   }
 
   &.selectable {

@@ -139,4 +139,15 @@ export class AiChatService {
       error: (err) => console.error('Erro ao baixar arquivo', err),
     });
   }
+
+  public reprocessarArquivo(id: string): void {
+    this.http.post<IChatFile>(`${this.urlBase}/files/${id}/retry`, {}).subscribe({
+      next: (updatedFile) => {
+        this.files.update((files) =>
+          files.map((file) => (file.id === id ? updatedFile : file))
+        );
+      },
+      error: (err) => console.error('Erro ao reprocessar arquivo', err),
+    });
+  }
 }

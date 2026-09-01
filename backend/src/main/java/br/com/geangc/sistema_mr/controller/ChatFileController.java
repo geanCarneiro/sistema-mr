@@ -1,6 +1,7 @@
 package br.com.geangc.sistema_mr.controller;
 
 import br.com.geangc.sistema_mr.controller.dto.ChatFileDto;
+import br.com.geangc.sistema_mr.model.ChatFile;
 import br.com.geangc.sistema_mr.service.DocumentService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -69,5 +70,11 @@ public class ChatFileController {
     public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         documentService.delete(id, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/retry")
+    public ResponseEntity<ChatFileDto> retry(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+        ChatFile file = documentService.retry(id, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject());
+        return ResponseEntity.ok(ChatFileDto.from(file));
     }
 }

@@ -9,7 +9,7 @@
     </header>
 
     <main class="chat-history" #scrollContainer>
-      @for (msg of messages(); track $index) {
+      @for (msg of messages(); track msg.messageId ?? $index) {
         <div
           [class]="'chat-bubble ' + (msg.messageType === 'USER' ? 'user' : 'assistant')"
           [ngClass]="{ invalid: msg.notValid }"
@@ -20,6 +20,23 @@
           </div>
           @if (msg.attachments?.length) {
             <div class="message-attachments">📎 {{ msg.attachments?.join(', ') }}</div>
+          }
+          @if (msg.groundingFiles?.length) {
+            <div class="message-sources" aria-label="Fontes utilizadas">
+              <strong>Fontes utilizadas</strong>
+              <ul>
+                @for (source of msg.groundingFiles; track source.id) {
+                  <li>
+                    <span
+                      [class.source-unavailable]="source.available === false"
+                      [attr.aria-label]="sourceAccessibilityLabel(source)"
+                    >
+                      {{ source.name }}
+                    </span>
+                  </li>
+                }
+              </ul>
+            </div>
           }
           <div class="bubble-content">
             <pre>{{ msg.content }}</pre>

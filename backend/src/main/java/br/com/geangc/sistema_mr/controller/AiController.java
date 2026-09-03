@@ -7,16 +7,23 @@ package br.com.geangc.sistema_mr.controller;
 import br.com.geangc.sistema_mr.configuration.SanitizedNeo4jChatMemoryRepository;
 import br.com.geangc.sistema_mr.configuration.TransactionalChatMemoryAdvisor;
 import br.com.geangc.sistema_mr.controller.dto.ChatMessageDto;
+import br.com.geangc.sistema_mr.controller.dto.GroundingFileDto;
+import br.com.geangc.sistema_mr.model.Interaction;
+import br.com.geangc.sistema_mr.service.InteractionService;
 import br.com.geangc.sistema_mr.service.GroundingContextService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -41,15 +48,18 @@ public class AiController {
     private final ChatClient chatClient;
     private final SanitizedNeo4jChatMemoryRepository chatMemoryRepository;
     private final GroundingContextService groundingContextService;
+    private final InteractionService interactionService;
     
     public AiController(
             final ChatClient chatClient,
             final SanitizedNeo4jChatMemoryRepository chatMemoryRepository,
-            final GroundingContextService groundingContextService
+            final GroundingContextService groundingContextService,
+            final InteractionService interactionService
     ) {
         this.chatClient = chatClient;
         this.chatMemoryRepository = chatMemoryRepository;
         this.groundingContextService = groundingContextService;
+        this.interactionService = interactionService;
     }
     
         // DTO de requisição
@@ -68,10 +78,13 @@ public class AiController {
 
     // DTO de resposta
     public record ChatResponseDTO(
+        UUID interactionId,
+        UUID userMessageId,
+        UUID assistantMessageId,
         String content,
         Instant timestamp,
         String messageType,
-        List<GroundingContextService.GroundingFile> groundingFiles
+        List<GroundingFileDto> groundingFiles
     ) {}
     
     @PostMapping
@@ -79,6 +92,10 @@ public class AiController {
             @Valid @RequestBody ChatRequestDTO request,
             @AuthenticationPrincipal Jwt jwt
     ) {
+        Instant createdAt = Instant.now();
+        UUID interactionId = UUID.randomUUID();
+        UUID userMessageId = UUID.randomUUID();
+        UUID assistantMessageId = UUID.randomUUID();
         String conversationId = conversationIdFor(jwt.getSubject());
         var prepared = groundingContextService.prepare(
                 conversationId,
@@ -92,7 +109,10 @@ public class AiController {
                 .user(prepared.modelPrompt())
                 .advisors(advisor -> advisor
                         .param(ChatMemory.CONVERSATION_ID, conversationId)
-                        .param(TransactionalChatMemoryAdvisor.ORIGINAL_USER_PROMPT, request.prompt()))
+                        .param(TransactionalChatMemoryAdvisor.ORIGINAL_USER_PROMPT, request.prompt())
+                        .param(TransactionalChatMemoryAdvisor.INTERACTION_ID, interactionId.toString())
+                        .param(TransactionalChatMemoryAdvisor.USER_MESSAGE_ID, userMessageId.toString())
+                        .param(TransactionalChatMemoryAdvisor.ASSISTANT_MESSAGE_ID, assistantMessageId.toString()))
                 .call()
                 .chatResponse();
 
@@ -102,12 +122,29 @@ public class AiController {
                 .orElseThrow(() -> new IllegalStateException("O modelo não retornou uma resposta"));
 
         String content = assistantMessage.getText();
+        Instant completedAt = timestampFrom(assistantMessage);
+
+        interactionService.persistCompleted(
+                interactionId,
+                userMessageId,
+                assistantMessageId,
+                request.prompt(),
+                content,
+                conversationId,
+                jwt.getSubject(),
+                createdAt,
+                completedAt,
+                prepared.files()
+        );
 
         ChatResponseDTO responseDTO = new ChatResponseDTO(
+                interactionId,
+                userMessageId,
+                assistantMessageId,
                 content,
-                timestampFrom(assistantMessage),
+                completedAt,
                 "ASSISTANT",
-                prepared.files()
+                prepared.files().stream().map(GroundingFileDto::from).toList()
         );
 
         return ResponseEntity.ok(responseDTO);
@@ -118,9 +155,33 @@ public class AiController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         String conversationId = conversationIdFor(jwt.getSubject());
-        return chatMemoryRepository.findByConversationId(conversationId).stream()
-                .map(ChatMessageDto::fromMessage)
+        List<Interaction> interactions = interactionService.findHistory(conversationId, jwt.getSubject());
+        List<ChatMessageDto> persistedHistory = interactions.stream()
+                .flatMap(interaction -> Stream.of(
+                        ChatMessageDto.userFrom(interaction),
+                        ChatMessageDto.assistantFrom(interaction)
+                ))
                 .collect(Collectors.toList());
+
+        Set<String> persistedIds = new HashSet<>();
+        interactions.forEach(interaction -> {
+            persistedIds.add(interaction.id().toString());
+            persistedIds.add(interaction.userMessageId().toString());
+            persistedIds.add(interaction.assistantMessageId().toString());
+        });
+
+        List<ChatMessageDto> legacyHistory = chatMemoryRepository.findByConversationId(conversationId).stream()
+                .map(ChatMessageDto::fromMessage)
+                .filter(message -> !persistedIds.contains(message.interactionId())
+                        && !persistedIds.contains(message.messageId()))
+                .toList();
+
+        return Stream.concat(persistedHistory.stream(), legacyHistory.stream())
+                .sorted(Comparator.comparing(
+                        ChatMessageDto::timestamp,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ))
+                .toList();
     }
 
     static String conversationIdFor(String subject) {

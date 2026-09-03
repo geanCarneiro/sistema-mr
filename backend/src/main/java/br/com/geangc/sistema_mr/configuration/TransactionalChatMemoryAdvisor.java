@@ -32,6 +32,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
 
     public static final String ORIGINAL_USER_PROMPT = "original-user-prompt";
+    public static final String INTERACTION_ID = "interaction-id";
+    public static final String USER_MESSAGE_ID = "user-message-id";
+    public static final String ASSISTANT_MESSAGE_ID = "assistant-message-id";
 
     private final Logger logger = LoggerFactory.getLogger(TransactionalChatMemoryAdvisor.class);
     
@@ -58,10 +61,19 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
             String originalPrompt = (String) chatClientRequest.context()
                     .getOrDefault(ORIGINAL_USER_PROMPT, modelPrompt);
 
-            persistedUserMessage = canonicalUserMessage(originalPrompt, userTime);
+            persistedUserMessage = canonicalUserMessage(
+                    originalPrompt,
+                    userTime,
+                    contextValue(chatClientRequest, INTERACTION_ID),
+                    contextValue(chatClientRequest, USER_MESSAGE_ID)
+            );
+            Map<String, Object> modelMetadata = new HashMap<>();
+            modelMetadata.put("timestamp", userTime);
+            putIfPresent(modelMetadata, "interactionId", contextValue(chatClientRequest, INTERACTION_ID));
+            putIfPresent(modelMetadata, "messageId", contextValue(chatClientRequest, USER_MESSAGE_ID));
             modelUserMessage = UserMessage.builder()
                     .text(formatForModel(modelPrompt, userTime))
-                    .metadata(Map.of("timestamp", userTime))
+                    .metadata(modelMetadata)
                     .build();
         }
 
@@ -119,6 +131,8 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
             String rawResponse = resp.getResult().getOutput().getText();
             if (rawResponse != null && !rawResponse.isBlank()) {
                 assistantMetadata.put("timestamp", assistantTime);
+                putIfPresent(assistantMetadata, "interactionId", contextValue(chatClientRequest, INTERACTION_ID));
+                putIfPresent(assistantMetadata, "messageId", contextValue(chatClientRequest, ASSISTANT_MESSAGE_ID));
                 assistantMetadata.remove("rawContent");
 
                 AssistantMessage assistantMessage = AssistantMessage.builder()
@@ -152,6 +166,33 @@ public class TransactionalChatMemoryAdvisor implements CallAdvisor  {
                 .text(prompt)
                 .metadata(Map.of("timestamp", timestamp))
                 .build();
+    }
+
+    static UserMessage canonicalUserMessage(
+            String prompt,
+            String timestamp,
+            String interactionId,
+            String messageId
+    ) {
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("timestamp", timestamp);
+        putIfPresent(metadata, "interactionId", interactionId);
+        putIfPresent(metadata, "messageId", messageId);
+        return UserMessage.builder()
+                .text(prompt)
+                .metadata(metadata)
+                .build();
+    }
+
+    private static String contextValue(ChatClientRequest request, String key) {
+        Object value = request.context().get(key);
+        return value == null ? null : value.toString();
+    }
+
+    private static void putIfPresent(Map<String, Object> metadata, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            metadata.put(key, value);
+        }
     }
 
     static Message messageForModel(Message message) {

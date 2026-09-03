@@ -132,6 +132,20 @@ button {
   opacity: 0.85;
 }
 
+.message-sources {
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+
+  ul {
+    margin: 0.25rem 0 0;
+    padding-left: 1.25rem;
+  }
+}
+
+.source-unavailable {
+  color: var(--p-red-600, #b91c1c);
+}
+
 .chat-composer {
   background: #252526;
   border-top: 1px solid #333;
@@ -203,7 +217,8 @@ button {
 .files-panel {
   display: flex;
   flex-direction: column;
-  width: 25rem;
+  min-width: 0;
+  width: auto;
 
   button {
     width: 2rem;
@@ -264,6 +279,7 @@ button {
 
   label {
     cursor: pointer;
+    text-align: right;
   }
 
   &:has(.p-disabled) {

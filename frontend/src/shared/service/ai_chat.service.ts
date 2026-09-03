@@ -1,14 +1,17 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { IChatMessage } from '../interface/chat_message.interface';
+import { IChatMessage, IGroundingFile } from '../interface/chat_message.interface';
 import { finalize } from 'rxjs';
 import { IChatFile } from '../interface/chat_file.interface';
 
 export interface IChatResponse {
+  interactionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
   content: string;
   timestamp: string;
   messageType: 'ASSISTANT';
-  groundingFiles?: Array<{ id: string; name: string }>;
+  groundingFiles?: IGroundingFile[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -53,10 +56,24 @@ export class AiChatService {
       .subscribe({
         next: (res) => {
           // Sucesso: adiciona a resposta da IA com o timestamp devolvido pelo back-end
+          this.messages.update((list) =>
+            list.map((message) =>
+              message === userMsg
+                ? {
+                    ...message,
+                    messageId: res.userMessageId,
+                    interactionId: res.interactionId,
+                  }
+                : message,
+            ),
+          );
           const aiMsg: IChatMessage = {
             messageType: 'ASSISTANT',
+            messageId: res.assistantMessageId,
+            interactionId: res.interactionId,
             content: res.content,
             timestamp: res.timestamp,
+            groundingFiles: res.groundingFiles ?? [],
           };
           this.messages.update((list) => [...list, aiMsg]);
         },

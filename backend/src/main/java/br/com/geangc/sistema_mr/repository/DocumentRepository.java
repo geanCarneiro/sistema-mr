@@ -98,13 +98,15 @@ public class DocumentRepository {
     }
 
     public Optional<ChatFile> findById(UUID id) {
-        return findOne("MATCH (file:Arquivo {id: $id}) RETURN file", Map.of("id", id.toString()));
+        return findOne("MATCH (file:Arquivo {id: $id}) "
+                + "WHERE file.deletedAt IS NULL RETURN file", Map.of("id", id.toString()));
     }
 
     public Optional<ChatFile> findOwned(UUID id, String conversationId, String ownerSubject) {
         return findOne("""
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {id: $id})
+                WHERE file.deletedAt IS NULL
                 RETURN file
                 """, Map.of(
                 "id", id.toString(),
@@ -117,6 +119,7 @@ public class DocumentRepository {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo)
+                WHERE file.deletedAt IS NULL
                 RETURN file
                 ORDER BY file.createdAt DESC
                 """;
@@ -132,6 +135,7 @@ public class DocumentRepository {
         String query = """
                 MATCH (file:Arquivo)
                 WHERE file.status IN ['QUEUED', 'EXTRACTING', 'EMBEDDING']
+                  AND file.deletedAt IS NULL
                 RETURN file
                 ORDER BY file.createdAt
                 """;
@@ -145,6 +149,7 @@ public class DocumentRepository {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {status: 'READY'})
+                WHERE file.deletedAt IS NULL
                 RETURN count(file) > 0 AS present
                 """;
         try (var session = driver.session()) {
@@ -166,7 +171,7 @@ public class DocumentRepository {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {status: 'READY'})
-                WHERE file.id IN $ids
+                WHERE file.id IN $ids AND file.deletedAt IS NULL
                 RETURN file
                 ORDER BY file.createdAt
                 """;
@@ -184,6 +189,7 @@ public class DocumentRepository {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {id: $id, status: 'FAILED'})
+                WHERE file.deletedAt IS NULL
                 OPTIONAL MATCH (file)-[:CONTEM]->(chunk:Chunk)
                 DETACH DELETE chunk
                 WITH file
@@ -212,6 +218,7 @@ public class DocumentRepository {
     public void updateStatus(UUID id, DocumentStatus status, String errorMessage) {
         String query = """
                 MATCH (file:Arquivo {id: $id})
+                WHERE file.deletedAt IS NULL
                 SET file.status = $status,
                     file.errorMessage = $errorMessage,
                     file.updatedAt = $updatedAt
@@ -236,6 +243,7 @@ public class DocumentRepository {
     ) {
         String query = """
                 MATCH (file:Arquivo {id: $id})
+                WHERE file.deletedAt IS NULL
                 OPTIONAL MATCH (file)-[:CONTEM]->(oldChunk:Chunk)
                 DETACH DELETE oldChunk
                 WITH file
@@ -290,6 +298,7 @@ public class DocumentRepository {
                 YIELD node AS chunk, score
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {status: 'READY'})-[:CONTEM]->(chunk)
+                WHERE file.deletedAt IS NULL
                 WITH file, max(score) AS score
                 WHERE score >= $threshold
                 RETURN file, score
@@ -314,6 +323,7 @@ public class DocumentRepository {
             String exactQuery = """
                     MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                           -[:POSSUI]->(file:Arquivo {status: 'READY'})-[:CONTEM]->(chunk:Chunk)
+                    WHERE file.deletedAt IS NULL
                     WITH file, vector.similarity.cosine(chunk.embedding, $embedding) AS chunkScore
                     WITH file, max(chunkScore) AS score
                     WHERE score >= $threshold
@@ -329,15 +339,25 @@ public class DocumentRepository {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
                       -[:POSSUI]->(file:Arquivo {id: $id})
+                WHERE file.deletedAt IS NULL
                 OPTIONAL MATCH (file)-[:CONTEM]->(chunk:Chunk)
-                DETACH DELETE chunk, file
-                """;
+                DETACH DELETE chunk
+                WITH file
+                SET file.deletedAt = $deletedAt,
+                    file.contextStorageKey = null,
+                    file.updatedAt = $updatedAt
+        """;
         try (var session = driver.session()) {
-            session.executeWriteWithoutResult(transaction -> transaction.run(query, Map.of(
-                    "id", id.toString(),
-                    "conversationId", conversationId,
-                    "ownerSubject", ownerSubject
-            )).consume());
+            session.executeWriteWithoutResult(transaction -> {
+                String deletedAt = Instant.now().toString();
+                Map<String, Object> parameters = new HashMap<>();
+                parameters.put("id", id.toString());
+                parameters.put("conversationId", conversationId);
+                parameters.put("ownerSubject", ownerSubject);
+                parameters.put("deletedAt", deletedAt);
+                parameters.put("updatedAt", deletedAt);
+                transaction.run(query, parameters).consume();
+            });
         }
     }
 

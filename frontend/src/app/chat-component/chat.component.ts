@@ -11,7 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AiChatService } from '../../shared/service/ai_chat.service';
-import { IChatMessage } from '../../shared/interface/chat_message.interface';
+import { IChatMessage, IGroundingFile } from '../../shared/interface/chat_message.interface';
 import { AuthService, IUserData } from '../../shared/service/auth.service';
 import { IChatFile } from '../../shared/interface/chat_file.interface';
 import { ButtonDirective, ButtonIcon } from 'primeng/button';
@@ -180,6 +180,12 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
       READY: 'Pronto',
       FAILED: 'Falhou',
     }[status];
+  }
+
+  sourceAccessibilityLabel(source: IGroundingFile): string {
+    return source.available === false
+      ? `Fonte ${source.name}. Arquivo não está mais disponível.`
+      : `Fonte ${source.name}. Arquivo utilizado na resposta.`;
   }
 
   logout(): void {

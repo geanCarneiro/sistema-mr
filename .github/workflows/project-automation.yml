@@ -29,6 +29,7 @@ on:
           - In Progress
           - Review
           - Done
+          - Canceled
 
 concurrency:
   group: sistema-mr-project-automation

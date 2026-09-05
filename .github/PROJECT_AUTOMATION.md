@@ -62,7 +62,13 @@ Em uma Issue rastreada, publique um comentário contendo um dos comandos:
 | `/backlog` | Backlog, ou Todo quando o template usa esse nome |
 | `/start` | In Progress |
 | `/review` | Review, ou In review quando o template usa esse nome |
-| `/done` | Done e fecha a Issue |
+| `/done` | Done e fecha a Issue como concluída |
+| `/cancel` | Canceled e fecha a Issue como não planejada/obsoleta |
+
+O comando `/cancel` usa a razão nativa `not planned` do GitHub. O evento de
+fechamento consulta essa razão antes de sincronizar o Project, portanto uma
+Issue cancelada não volta para `Done`. Fechamentos concluídos por `/done`, por
+uma PR mesclada ou por outro fluxo com razão `completed` continuam em `Done`.
 
 Somente comandos enviados pelo proprietário ou por colaboradores são aceitos.
 Quando o comando é processado, a automação adiciona uma reação de foguete.
@@ -93,7 +99,7 @@ Na execução manual do workflow:
 
 1. mantenha `bootstrap` habilitado;
 2. informe o número em `issue_number`, sem `#`;
-3. escolha um `status` ou mantenha `Keep`;
+3. escolha um `status` — incluindo `Canceled` quando aplicável — ou mantenha `Keep`;
 4. execute o workflow.
 
 Isso é útil para migrar uma Issue antiga. Ela precisa ter a label `tracked`.

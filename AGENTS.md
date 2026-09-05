@@ -182,6 +182,30 @@ operacionais abaixo.
 - O usuário pode acompanhar a execução e corrigir a rota; incorpore essas correções
   sem ampliar implicitamente o escopo autorizado.
 
+## Identidade e escopo do produto
+
+- O Sistema MR é um assistente pessoal inteligente, contextual e proativo,
+  orientado a assuntos, documentos, eventos e pendências, criado para auxiliar
+  uma única pessoa na organização e no acompanhamento da própria vida.
+- O produto não deve ser tratado como sistema corporativo, plataforma
+  organizacional, gerenciador de projetos, plataforma de agentic coding ou
+  simples chatbot. A complexidade interna do runtime não altera essa identidade
+  pessoal e individual.
+- O núcleo do produto deve ampliar a capacidade do assistente de compreender,
+  lembrar, agir e alertar, preservando o contexto pessoal e a privacidade. O
+  conceito de `Assunto` é preferível a abstrações organizacionais que não sejam
+  necessárias para esse objetivo.
+- Ao avaliar uma nova ideia ou Issue, considere:
+  - se ela ajuda uma pessoa a organizar ou acompanhar a própria vida;
+  - se trabalha sobre assuntos, mensagens, eventos, documentos ou pendências;
+  - se preserva o contexto pessoal e a privacidade;
+  - se amplia a capacidade do assistente de compreender, lembrar, agir ou
+    alertar;
+  - se é uma necessidade do assistente pessoal ou se introduz complexidade
+    corporativa desnecessária.
+- Se a proposta não atender a esse enquadramento, trate-a como fora do núcleo
+  atual do Sistema MR e explicite essa decisão antes de implementá-la.
+
 ## Arquitetura do AgentRuntime
 
 - Antes de planejar ou implementar a BL-014 ou qualquer Issue que dependa dela,
@@ -244,6 +268,10 @@ operacionais abaixo.
 ## Padrão de commits
 
 - Use o formato Conventional Commits no título: `tipo(escopo): resumo curto`.
+- Escreva sempre em português o resumo do título e todo o conteúdo descritivo do
+  corpo da mensagem. Os tipos padronizados do Conventional Commits, como `feat`,
+  `fix` e `chore`, podem permanecer em sua forma convencional, assim como nomes
+  próprios e identificadores técnicos quando necessário.
 - O corpo deve identificar a Issue atendida com `Issue: #<numero>`.
 - O corpo deve conter uma seção `Changelog:` com uma lista objetiva das mudanças
   observáveis, sem incluir segredos, tokens ou valores sensíveis.

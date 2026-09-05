@@ -28,6 +28,7 @@ const FIELD_DEFINITIONS = [
       option('In Progress', 'YELLOW', 'Implementação em andamento'),
       option('Review', 'PURPLE', 'Aguardando revisão ou validação'),
       option('Done', 'GREEN', 'Trabalho concluído'),
+      option('Canceled', 'GRAY', 'Item cancelado ou substituído'),
     ],
   },
   {
@@ -70,6 +71,7 @@ const STATUS_ALIASES = {
   'In Progress': ['In Progress', 'In progress'],
   Review: ['Review', 'In Review', 'In review'],
   Done: ['Done'],
+  Canceled: ['Canceled', 'Cancelled'],
 };
 
 const COMMAND_STATUSES = {
@@ -77,6 +79,7 @@ const COMMAND_STATUSES = {
   '/start': 'In Progress',
   '/review': 'Review',
   '/done': 'Done',
+  '/cancel': 'Canceled',
 };
 
 const TRUSTED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
@@ -455,9 +458,12 @@ async function getIssue(github, owner, repo, issueNumber) {
   return response.data;
 }
 
-function statusForIssueAction(action) {
+function statusForIssueAction(action, issue = null) {
   if (action === 'opened' || action === 'reopened') return 'Backlog';
-  if (action === 'closed') return 'Done';
+  if (action === 'closed') {
+    const stateReason = normalize(issue?.state_reason).replace(/[\s-]+/g, '_');
+    return stateReason === 'not_planned' ? 'Canceled' : 'Done';
+  }
   return null;
 }
 
@@ -517,8 +523,14 @@ async function processIssueComment(github, context, project, owner, repo, core) 
   if (!requestedStatus) return false;
 
   const issueNumber = context.payload.issue.number;
-  if (command === '/done') {
-    await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed' });
+  if (command === '/done' || command === '/cancel') {
+    await github.rest.issues.update({
+      owner,
+      repo,
+      issue_number: issueNumber,
+      state: 'closed',
+      state_reason: command === '/cancel' ? 'not_planned' : 'completed',
+    });
   }
 
   const issue = await getIssue(github, owner, repo, issueNumber);
@@ -564,7 +576,7 @@ module.exports = async ({ github, context, core }) => {
     if (context.payload.action === 'opened' || context.payload.action === 'edited') {
       issue = await normalizeFormLabels(github, repositoryOwner, repo, issue, core);
     }
-    const requestedStatus = statusForIssueAction(context.payload.action);
+    const requestedStatus = statusForIssueAction(context.payload.action, issue);
     synchronized += Number(
       await synchronizeIssue(
         github,

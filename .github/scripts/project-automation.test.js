@@ -49,6 +49,8 @@ test('maps Issue lifecycle to Project status', () => {
   assert.equal(testables.statusForIssueAction('opened'), 'Backlog');
   assert.equal(testables.statusForIssueAction('reopened'), 'Backlog');
   assert.equal(testables.statusForIssueAction('closed'), 'Done');
+  assert.equal(testables.statusForIssueAction('closed', { state_reason: 'completed' }), 'Done');
+  assert.equal(testables.statusForIssueAction('closed', { state_reason: 'not_planned' }), 'Canceled');
   assert.equal(testables.statusForIssueAction('edited'), null);
 });
 
@@ -59,19 +61,21 @@ test('defines the Project workflow without a Ready status', () => {
 
   assert.deepEqual(
     statusDefinition.options.map((option) => option.name),
-    ['Backlog', 'In Progress', 'Review', 'Done'],
+    ['Backlog', 'In Progress', 'Review', 'Done', 'Canceled'],
   );
   assert.deepEqual(testables.STATUS_ALIASES, {
     Backlog: ['Backlog', 'Todo'],
     'In Progress': ['In Progress', 'In progress'],
     Review: ['Review', 'In Review', 'In review'],
     Done: ['Done'],
+    Canceled: ['Canceled', 'Cancelled'],
   });
   assert.deepEqual(testables.COMMAND_STATUSES, {
     '/backlog': 'Backlog',
     '/start': 'In Progress',
     '/review': 'Review',
     '/done': 'Done',
+    '/cancel': 'Canceled',
   });
 });
 

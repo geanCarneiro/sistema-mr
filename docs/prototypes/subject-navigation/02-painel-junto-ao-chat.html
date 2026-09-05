@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo 2 — painel junto ao chat</title>
+    <style>
+      :root { font-family: Inter, system-ui, sans-serif; color: #edf3ff; background: #0b1220; } * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; }
+      .app { display: grid; grid-template-columns: 66px 230px minmax(0, 820px); min-height: 100vh; margin: auto; max-width: 1250px; box-shadow: 0 0 80px #050812; }
+      .rail { padding: 22px 10px; background: #101a2d; border-right: 1px solid #263754; text-align: center; } .logo { font-weight: 900; color: #7db0ff; margin-bottom: 34px; } .icon { display: block; width: 42px; height: 42px; margin: 10px auto; border: 1px solid #31476e; border-radius: 12px; color: #b8c9e8; background: transparent; cursor: pointer; }
+      .subjects { padding: 22px 12px; background: #121e33; border-right: 1px solid #263754; } .subjects h2 { margin: 0 0 18px; font-size: 14px; color: #95a9cc; } .subject { width: 100%; margin: 3px 0; padding: 12px; border: 0; border-radius: 10px; text-align: left; color: #dce7ff; background: transparent; cursor: pointer; } .subject:hover, .subject.active { background: #263b60; } .subject small { display: block; margin-top: 5px; color: #849ac0; }
+      main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; background: #0e1728; } header { padding: 24px 30px 18px; border-bottom: 1px solid #263754; } h1 { margin: 0 0 5px; font-size: 22px; } header p { margin: 0; color: #8fa3c7; } .messages { padding: 30px; } .bubble { max-width: 650px; margin: 0 0 17px; padding: 14px 16px; border-radius: 14px; line-height: 1.5; } .user { margin-left: auto; background: #376fc5; } .assistant { background: #1b2a45; border: 1px solid #2b4168; } form { display: flex; gap: 10px; padding: 18px 30px 28px; } input { flex: 1; border: 1px solid #344d78; border-radius: 11px; padding: 14px; color: white; background: #111d32; } form button { border: 0; border-radius: 10px; padding: 0 18px; color: white; background: #4d86e8; cursor: pointer; }
+      @media (max-width: 800px) { .app { grid-template-columns: 54px 1fr; } .subjects { display: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <nav class="rail"><div class="logo">MR</div><button class="icon">⌂</button><button class="icon">⚙</button></nav>
+      <aside class="subjects"><h2>ASSUNTOS</h2><button class="subject active" data-title="Chat geral" data-description="Entrada principal para novas mensagens.">Chat geral<small>Roteamento automático</small></button><button class="subject" data-title="Consulta médica" data-description="Contexto presumido deste chat.">Consulta médica<small>Aguardando confirmação</small></button><button class="subject" data-title="Oportunidade de emprego" data-description="Entrevista e próximos passos.">Oportunidade de emprego<small>Em andamento</small></button><button class="subject" data-title="Conta de luz" data-description="Vencimento e pagamento.">Conta de luz<small>Vence em 5 dias</small></button></aside>
+      <main><header><h1 id="title">Chat geral</h1><p id="description">Entrada principal para novas mensagens.</p></header><section class="messages" id="messages"><div class="bubble assistant">O painel mantém os assuntos próximos da conversa, sem ocupar a navegação principal.</div><div class="bubble user">Quero tratar da receita, mas não nesse dia porque tenho uma entrevista.</div><div class="bubble assistant">Posso manter o assunto da consulta e criar uma referência à oportunidade de emprego.</div></section><form id="form"><input id="input" autocomplete="off" placeholder="Escreva uma mensagem..." /><button>Enviar</button></form></main>
+    </div>
+    <script>
+      const title = document.querySelector('#title'); const description = document.querySelector('#description'); const messages = document.querySelector('#messages');
+      document.querySelectorAll('.subject').forEach((item) => item.addEventListener('click', () => { document.querySelector('.subject.active')?.classList.remove('active'); item.classList.add('active'); title.textContent = item.dataset.title; description.textContent = item.dataset.description; }));
+      document.querySelector('#form').addEventListener('submit', (event) => { event.preventDefault(); const input = document.querySelector('#input'); if (!input.value.trim()) return; const bubble = document.createElement('div'); bubble.className = 'bubble user'; bubble.textContent = input.value; messages.append(bubble); input.value = ''; });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo 1 — sessão separada</title>
+    <style>
+      :root { font-family: Inter, system-ui, sans-serif; color: #e9efff; background: #0b1220; }
+      * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; }
+      .app { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+      aside { padding: 22px 14px; background: #101a2d; border-right: 1px solid #263754; }
+      .brand { padding: 0 12px 24px; font-weight: 800; letter-spacing: .03em; }
+      .section { margin: 18px 8px 8px; color: #7588aa; font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
+      button, .subject { width: 100%; border: 0; border-radius: 9px; padding: 11px 12px; text-align: left; color: #dce7ff; background: transparent; cursor: pointer; }
+      button:hover, .subject:hover, .subject.active { background: #213452; } .subject small { display: block; margin-top: 3px; color: #8297bc; }
+      main { display: grid; grid-template-rows: auto 1fr auto; max-width: 1000px; width: 100%; margin: 0 auto; }
+      header { padding: 24px 34px 18px; border-bottom: 1px solid #263754; } h1 { margin: 0 0 5px; font-size: 22px; } header p { margin: 0; color: #8fa3c7; }
+      .messages { padding: 34px; overflow: auto; } .bubble { max-width: 680px; margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; line-height: 1.5; } .user { margin-left: auto; background: #376fc5; } .assistant { background: #1b2a45; border: 1px solid #2b4168; }
+      form { display: flex; gap: 10px; padding: 18px 34px 28px; } input { flex: 1; border: 1px solid #344d78; border-radius: 11px; padding: 14px; color: white; background: #111d32; } form button { width: auto; background: #4d86e8; padding-inline: 18px; text-align: center; }
+      @media (max-width: 700px) { .app { grid-template-columns: 1fr; } aside { min-height: auto; border-right: 0; border-bottom: 1px solid #263754; } .subject { display: inline-block; width: auto; margin-right: 5px; } .section { display: inline-block; } }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside>
+        <div class="brand">SISTEMA MR</div>
+        <button class="subject active" data-title="Chat geral" data-description="Novas mensagens e assuntos ainda não classificados.">＋ Chat geral</button>
+        <div class="section">Assuntos</div>
+        <button class="subject" data-title="Consulta médica" data-description="Acompanhamento da consulta e da receita.">Consulta médica<small>Aguardando confirmação</small></button>
+        <button class="subject" data-title="Oportunidade de emprego" data-description="Entrevista e próximos passos.">Oportunidade de emprego<small>Em andamento</small></button>
+        <button class="subject" data-title="Conta de luz" data-description="Vencimento e pagamento.">Conta de luz<small>Vence em 5 dias</small></button>
+      </aside>
+      <main>
+        <header><h1 id="title">Chat geral</h1><p id="description">Novas mensagens e assuntos ainda não classificados.</p></header>
+        <section class="messages" id="messages"><div class="bubble assistant">Olá! Posso continuar um assunto existente, criar um novo ou pedir mais contexto.</div><div class="bubble user">Não posso marcar nesse dia porque tenho uma entrevista.</div><div class="bubble assistant">Encontrei uma possível referência a “Oportunidade de emprego”. Deseja vincular esta mensagem?</div></section>
+        <form id="form"><input id="input" autocomplete="off" placeholder="Escreva uma mensagem..." /><button>Enviar</button></form>
+      </main>
+    </div>
+    <script>
+      const title = document.querySelector('#title'); const description = document.querySelector('#description'); const messages = document.querySelector('#messages');
+      document.querySelectorAll('.subject').forEach((item) => item.addEventListener('click', () => { document.querySelector('.subject.active')?.classList.remove('active'); item.classList.add('active'); title.textContent = item.dataset.title; description.textContent = item.dataset.description; }));
+      document.querySelector('#form').addEventListener('submit', (event) => { event.preventDefault(); const input = document.querySelector('#input'); if (!input.value.trim()) return; const bubble = document.createElement('div'); bubble.className = 'bubble user'; bubble.textContent = input.value; messages.append(bubble); input.value = ''; messages.scrollTop = messages.scrollHeight; });
+    </script>
+  </body>
+</html>

@@ -182,6 +182,17 @@ operacionais abaixo.
 - O usuário pode acompanhar a execução e corrigir a rota; incorpore essas correções
   sem ampliar implicitamente o escopo autorizado.
 
+## Arquitetura do AgentRuntime
+
+- Antes de planejar ou implementar a BL-014 ou qualquer Issue que dependa dela,
+  leia `docs/architecture/agent-runtime.md`.
+- Esse documento é a referência arquitetural para `Assunto`, `AgentRun`,
+  `ModelInvocation`, estados de execução, seleção de providers, associação de
+  mensagens, contexto, retomada e execução entre assuntos.
+- Se uma implementação exigir alterar um desses contratos, atualize a
+  documentação ou faça a alteração documental junto da implementação e
+  explicite o impacto nas Issues dependentes.
+
 ## Ambiente de desenvolvimento local
 
 - Considere este repositório um ambiente de desenvolvimento local.

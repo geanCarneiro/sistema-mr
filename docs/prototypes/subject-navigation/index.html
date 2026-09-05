@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipos de navegação por assunto</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+      body { margin: 0; min-height: 100vh; background: #0e1525; color: #e8eefc; display: grid; place-items: center; }
+      main { width: min(760px, calc(100% - 40px)); padding: 42px; background: #151f34; border: 1px solid #2d3d5e; border-radius: 20px; box-shadow: 0 24px 70px #05081288; }
+      h1 { margin-top: 0; font-size: 28px; }
+      p { color: #aebbd6; line-height: 1.6; }
+      nav { display: grid; gap: 12px; margin-top: 28px; }
+      a { display: block; padding: 18px 20px; border: 1px solid #34486f; border-radius: 12px; color: #e8eefc; text-decoration: none; background: #1b2943; }
+      a:hover { border-color: #77a7ff; background: #223657; }
+      small { display: block; margin-top: 5px; color: #94a5c5; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Navegação por assuntos</h1>
+      <p>Três alternativas visuais para o mesmo comportamento: chat geral, assuntos paralelos e seleção de contexto. Cada página é independente e usa somente HTML, CSS e JavaScript.</p>
+      <nav>
+        <a href="01-sidebar-separada.html">1. Sessão separada à esquerda<small>Lista de assuntos como navegação principal da aplicação.</small></a>
+        <a href="02-painel-junto-ao-chat.html">2. Painel à esquerda do chat<small>Assuntos próximos da conversa, com navegação global reduzida.</small></a>
+        <a href="03-abas-no-chat.html">3. Abas no chat — opção escolhida<small>Chat geral fixo; assuntos tratados como abas roláveis no topo do chat.</small></a>
+      </nav>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Protótipo 3 — abas no chat</title>
+    <style>
+      :root { font-family: Inter, system-ui, sans-serif; color: #edf3ff; background: #0b1220; } * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; display: grid; place-items: center; } .app { width: min(1100px, 100%); min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr; background: #0e1728; }
+      header { padding: 20px 28px; background: #101a2d; border-bottom: 1px solid #263754; } .brand { font-weight: 900; letter-spacing: .05em; }
+      .tabs { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px; padding: 10px 18px 0; background: #101a2d; border-bottom: 1px solid #263754; } .subject-tabs { display: flex; gap: 4px; overflow-x: auto; } .tab { min-width: 130px; border: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; padding: 12px 14px; color: #9cb0d2; background: transparent; cursor: pointer; white-space: nowrap; } .tab:hover, .tab.active { color: #f2f6ff; background: #1b2a45; border-bottom-color: #65a0ff; } .general-tab { border-right: 1px solid #34496f; padding-right: 18px; }
+      section { display: grid; grid-template-rows: auto 1fr auto; width: min(820px, 100%); margin: 0 auto; } .context { padding: 26px 30px 14px; } h1 { margin: 0 0 5px; font-size: 22px; } .context p { margin: 0; color: #8fa3c7; } .messages { padding: 18px 30px; } .bubble { max-width: 650px; margin: 0 0 17px; padding: 14px 16px; border-radius: 14px; line-height: 1.5; } .user { margin-left: auto; background: #376fc5; } .assistant { background: #1b2a45; border: 1px solid #2b4168; } form { display: flex; gap: 10px; padding: 18px 30px 28px; } input { flex: 1; border: 1px solid #344d78; border-radius: 11px; padding: 14px; color: white; background: #111d32; } form button { border: 0; border-radius: 10px; padding: 0 18px; color: white; background: #4d86e8; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="app"><header><div class="brand">SISTEMA MR</div></header><nav class="tabs"><div class="general-tab"><button class="tab active" data-title="Chat geral" data-description="Todos os assuntos e novas mensagens.">Chat geral</button></div><div class="subject-tabs"><button class="tab" data-title="Consulta médica" data-description="Contexto presumido deste chat.">Consulta médica</button><button class="tab" data-title="Oportunidade de emprego" data-description="Entrevista e próximos passos.">Oportunidade de emprego</button><button class="tab" data-title="Conta de luz" data-description="Vencimento e pagamento.">Conta de luz</button></div></nav><section><div class="context"><h1 id="title">Chat geral</h1><p id="description">Todos os assuntos e novas mensagens.</p></div><div class="messages" id="messages"><div class="bubble assistant">A aba geral fica fixa; os assuntos podem se acumular e rolar. Novos assuntos surgem quando uma mensagem não se encaixa nos existentes.</div><div class="bubble user">Tenho uma entrevista no mesmo dia da consulta.</div><div class="bubble assistant">Vou manter esta mensagem no assunto atual e relacioná-la à oportunidade de emprego.</div></div><form id="form"><input id="input" autocomplete="off" placeholder="Escreva uma mensagem..." /><button>Enviar</button></form></section></div>
+    <script>
+      const title = document.querySelector('#title'); const description = document.querySelector('#description'); const messages = document.querySelector('#messages');
+      document.querySelectorAll('.tab').forEach((item) => item.addEventListener('click', () => { document.querySelector('.tab.active')?.classList.remove('active'); item.classList.add('active'); title.textContent = item.dataset.title; description.textContent = item.dataset.description; }));
+      document.querySelector('#form').addEventListener('submit', (event) => { event.preventDefault(); const input = document.querySelector('#input'); if (!input.value.trim()) return; const bubble = document.createElement('div'); bubble.className = 'bubble user'; bubble.textContent = input.value; messages.append(bubble); input.value = ''; });
+    </script>
+  </body>
+</html>

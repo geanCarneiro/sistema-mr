@@ -5,11 +5,10 @@ import br.com.geangc.sistema_mr.agent.model.AgentRunResult;
 import br.com.geangc.sistema_mr.agent.model.AgentRunTrigger;
 import br.com.geangc.sistema_mr.agent.service.AgentRuntime;
 import br.com.geangc.sistema_mr.agent.service.AgentRunUnavailableException;
+import br.com.geangc.sistema_mr.agent.tool.AgentToolRegistry;
 import br.com.geangc.sistema_mr.controller.dto.GroundingFileDto;
-import br.com.geangc.sistema_mr.tool_calling.PythonToolConfig;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +18,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.support.ToolCallbacks;
-import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +29,7 @@ public class ChatApplicationService {
     private final InteractionService interactionService;
     private final AgentRuntime agentRuntime;
     private final ChatMemory chatMemory;
-    private final PythonToolConfig pythonToolConfig;
+    private final AgentToolRegistry toolRegistry;
     private final String systemInstruction;
 
     public ChatApplicationService(
@@ -41,7 +38,7 @@ public class ChatApplicationService {
             InteractionService interactionService,
             AgentRuntime agentRuntime,
             ChatMemory chatMemory,
-            PythonToolConfig pythonToolConfig,
+            AgentToolRegistry toolRegistry,
             @Qualifier("chatSystemInstruction") String systemInstruction
     ) {
         this.conversationScopeService = conversationScopeService;
@@ -49,7 +46,7 @@ public class ChatApplicationService {
         this.interactionService = interactionService;
         this.agentRuntime = agentRuntime;
         this.chatMemory = chatMemory;
-        this.pythonToolConfig = pythonToolConfig;
+        this.toolRegistry = toolRegistry;
         this.systemInstruction = systemInstruction;
     }
 
@@ -86,7 +83,6 @@ public class ChatApplicationService {
                 userMessageId
         ));
 
-        List<ToolCallback> tools = Arrays.asList(ToolCallbacks.from(pythonToolConfig));
         AgentRunResult result = agentRuntime.execute(new AgentRunCommand(
                 UUID.randomUUID(),
                 scope.subjectId(),
@@ -95,11 +91,11 @@ public class ChatApplicationService {
                 ownerSubject,
                 AgentRunTrigger.USER_MESSAGE,
                 messages,
-                tools,
+                toolRegistry.all(),
                 null
         ));
 
-        if (!result.completed()) {
+        if (!result.completed() && result.status() != br.com.geangc.sistema_mr.agent.model.AgentRunStatus.WAITING_FOR_USER) {
             if (result.status().name().startsWith("WAITING")) {
                 throw new AgentRunUnavailableException(
                         result.failureReason() == null
@@ -108,6 +104,9 @@ public class ChatApplicationService {
             }
             throw new IllegalStateException(
                     result.failureReason() == null ? "A execução do agente falhou" : result.failureReason());
+        }
+        if (result.content() == null || result.content().isBlank()) {
+            throw new IllegalStateException("A execução do agente não retornou uma mensagem para o usuário");
         }
 
         Instant completedAt = result.completedAt() == null ? Instant.now() : result.completedAt();

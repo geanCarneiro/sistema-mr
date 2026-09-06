@@ -10,11 +10,19 @@ import br.com.geangc.sistema_mr.agent.model.AgentRun;
 import br.com.geangc.sistema_mr.agent.model.AgentRunCommand;
 import br.com.geangc.sistema_mr.agent.model.AgentRunResult;
 import br.com.geangc.sistema_mr.agent.model.AgentRunStatus;
+import br.com.geangc.sistema_mr.agent.tool.AgentTool;
+import br.com.geangc.sistema_mr.agent.tool.ToolAutonomyPolicy;
+import br.com.geangc.sistema_mr.agent.tool.ToolCallRequest;
+import br.com.geangc.sistema_mr.agent.tool.ToolDecision;
+import br.com.geangc.sistema_mr.agent.tool.ToolDecisionStatus;
+import br.com.geangc.sistema_mr.agent.tool.ToolPolicyContext;
 import br.com.geangc.sistema_mr.configuration.AgentRuntimeProperties;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -30,19 +38,22 @@ public class AgentRuntime {
     private final ModelGateway modelGateway;
     private final ToolExecutionPort toolExecutionPort;
     private final InMemoryRunScheduler scheduler;
+    private final ToolAutonomyPolicy toolAutonomyPolicy;
 
     public AgentRuntime(
             AgentRuntimeProperties properties,
             br.com.geangc.sistema_mr.agent.repository.AgentRunRepository repository,
             ModelGateway modelGateway,
             ToolExecutionPort toolExecutionPort,
-            InMemoryRunScheduler scheduler
+            InMemoryRunScheduler scheduler,
+            ToolAutonomyPolicy toolAutonomyPolicy
     ) {
         this.properties = properties;
         this.repository = repository;
         this.modelGateway = modelGateway;
         this.toolExecutionPort = toolExecutionPort;
         this.scheduler = scheduler;
+        this.toolAutonomyPolicy = toolAutonomyPolicy;
     }
 
     public AgentRunResult execute(AgentRunCommand command) {
@@ -76,6 +87,17 @@ public class AgentRuntime {
         Instant deadline = createdAt.plus(Duration.ofSeconds(properties.limits().maxDurationSeconds()));
         int modelInvocations = 0;
         int toolCalls = 0;
+        Map<String, Integer> callsPerTool = new HashMap<>();
+        Map<String, AgentTool> toolsByName = command.tools().stream()
+                .collect(java.util.stream.Collectors.toMap(AgentTool::name, tool -> tool, (first, second) -> first));
+        ToolPolicyContext toolPolicyContext = new ToolPolicyContext(
+                run.id(),
+                run.subjectId(),
+                run.ownerSubject(),
+                command.dataConstraints(),
+                command.grantedAutonomy(),
+                command.permissions()
+        );
         String providerId = null;
         String modelId = null;
 
@@ -93,7 +115,7 @@ public class AgentRuntime {
                         run.id(),
                         properties.defaultRouteConfig().id(),
                         conversation,
-                        command.tools(),
+                        command.tools().stream().map(AgentTool::callback).toList(),
                         command.dataConstraints(),
                         ProviderSelectionPolicy.AUTO,
                         properties.limits().maxSteps() - modelInvocations,
@@ -163,7 +185,52 @@ public class AgentRuntime {
                     return fail(run, "RUN_TOOL_CALL_LIMIT_EXCEEDED");
                 }
 
+                Map<String, Integer> requestedByTool = new HashMap<>();
                 for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
+                    AgentTool tool = toolsByName.get(toolCall.name());
+                    ToolDecision decision = toolAutonomyPolicy.evaluate(
+                            tool,
+                            new ToolCallRequest(toolCall.id(), toolCall.name(), toolCall.arguments()),
+                            toolPolicyContext
+                    );
+                    if (decision.status() != ToolDecisionStatus.ALLOWED) {
+                        if (decision.status() == ToolDecisionStatus.ASK
+                                || decision.status() == ToolDecisionStatus.CONFIRM) {
+                            repository.waitForUser(
+                                    run.id(),
+                                    run.ownerSubject(),
+                                    decision.status().name(),
+                                    decision.userMessage(),
+                                    toolCall.id(),
+                                    toolCall.name(),
+                                    toolCall.arguments()
+                            );
+                            return new AgentRunResult(
+                                    run.id(),
+                                    AgentRunStatus.WAITING_FOR_USER,
+                                    decision.userMessage(),
+                                    Instant.now(),
+                                    providerId,
+                                    modelId,
+                                    decision.reason()
+                            );
+                        }
+                        repository.recordToolCall(
+                                run.id(),
+                                run.ownerSubject(),
+                                toolCall.id(),
+                                toolCall.name(),
+                                toolCall.arguments(),
+                                decision.reason(),
+                                false
+                        );
+                        return fail(run, decision.reason());
+                    }
+                    int currentCalls = callsPerTool.getOrDefault(tool.name(), 0);
+                    int requestedCalls = requestedByTool.merge(tool.name(), 1, Integer::sum);
+                    if (currentCalls + requestedCalls > tool.maxCallsPerRun()) {
+                        return fail(run, "TOOL_CALL_LIMIT_EXCEEDED:" + tool.name());
+                    }
                     boolean reserved = repository.reserveToolCall(
                             run.id(),
                             run.ownerSubject(),
@@ -185,6 +252,9 @@ public class AgentRuntime {
                 }
 
                 toolCalls += requestedToolCalls;
+                for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
+                    callsPerTool.merge(toolCall.name(), 1, Integer::sum);
+                }
                 recordToolResponses(run, executionResult.conversationHistory());
                 conversation = new ArrayList<>(executionResult.conversationHistory());
 

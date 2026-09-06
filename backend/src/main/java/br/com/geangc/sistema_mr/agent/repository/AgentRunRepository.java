@@ -338,6 +338,37 @@ public class AgentRunRepository {
         executeUpdate(query, Map.of("runId", runId.toString(), "ownerSubject", ownerSubject, "reason", reason));
     }
 
+    public void waitForUser(
+            UUID runId,
+            String ownerSubject,
+            String waitingType,
+            String message,
+            String toolCallId,
+            String toolName,
+            String arguments
+    ) {
+        String query = """
+                MATCH (run:AgentRun {id: $runId, ownerSubject: $ownerSubject})
+                SET run.status = 'WAITING_FOR_USER',
+                    run.result = $message,
+                    run.failureReason = $waitingType,
+                    run.waitingToolCallId = $toolCallId,
+                    run.waitingToolName = $toolName,
+                    run.waitingToolArguments = $arguments,
+                    run.version = run.version + 1
+                RETURN run
+                """;
+        executeUpdate(query, Map.of(
+                "runId", runId.toString(),
+                "ownerSubject", ownerSubject,
+                "waitingType", waitingType,
+                "message", message,
+                "toolCallId", toolCallId == null ? "" : toolCallId,
+                "toolName", toolName == null ? "" : toolName,
+                "arguments", arguments == null ? "" : arguments
+        ));
+    }
+
     private void updateTerminal(
             UUID runId,
             String ownerSubject,

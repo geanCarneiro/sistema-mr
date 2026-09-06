@@ -39,14 +39,13 @@ export class AuthService {
         this.loading.set(false);
         console.error('Erro na resposta do back:', err);
         this.erro.set(
-          typeof err.error === 'string' && err.error
+          typeof err.error === 'string' && err.error && !this.isHtmlError(err.error)
             ? err.error
             : 'Erro ao autenticar com o servidor.',
         );
       },
     });
   }
-
 
   isAuthenticated(): boolean {
     const token = localStorage.getItem('token');
@@ -104,5 +103,9 @@ export class AuthService {
       throw new Error('Payload JWT inválido');
     }
     return payload as IJwtPayload;
+  }
+
+  private isHtmlError(message: string): boolean {
+    return /<\s*!doctype\b|<\s*html\b|<\s*(head|body)\b/i.test(message);
   }
 }

@@ -1,0 +1,104 @@
+<div class="chat-wrapper">
+  <header class="chat-header">
+    <h2>AI Chat Sandbox</h2>
+    <div class="header-actions">
+      <button class="btn-secondary" type="button" (click)="reloadHistory.emit()">
+        🔄 Histórico
+      </button>
+      <button class="btn-secondary" type="button" (click)="logout.emit()">Sair</button>
+    </div>
+  </header>
+
+  <main class="chat-history" #scrollContainer>
+    @for (msg of messages(); track msg.messageId ?? $index) {
+      <div
+        [class]="'chat-bubble ' + (msg.messageType === 'USER' ? 'user' : 'assistant')"
+        [ngClass]="{ invalid: msg.notValid }"
+      >
+        <div class="bubble-header">
+          <strong>{{ msg.messageType === 'USER' ? userName() : 'Gemini' }}</strong>
+          {{ msg.timestamp | date: "dd/MM/yyyy 'às' HH:mm:ss" }}
+        </div>
+        @if (msg.attachments?.length) {
+          <div class="message-attachments">📎 {{ msg.attachments?.join(', ') }}</div>
+        }
+        @if (msg.groundingFiles?.length) {
+          <div class="message-sources" aria-label="Fontes utilizadas">
+            <strong>Fontes utilizadas</strong>
+            <ul>
+              @for (source of msg.groundingFiles; track source.id) {
+                <li>
+                  <span
+                    [class.source-unavailable]="source.available === false"
+                    [attr.aria-label]="sourceAccessibilityLabel(source)"
+                  >
+                    {{ source.name }}
+                  </span>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+        <div class="bubble-content">
+          <pre>{{ msg.content }}</pre>
+        </div>
+      </div>
+    } @empty {
+      <div class="empty-state">Nenhuma mensagem no histórico. Digite algo para começar.</div>
+    }
+
+    @if (loading()) {
+      <div class="chat-bubble assistant loading">
+        <em>Processando resposta (e ferramentas, se necessário)...</em>
+      </div>
+    }
+  </main>
+
+  <footer class="chat-composer">
+    @if (selectedFileIds().length) {
+      <div class="selection-bar">
+        <div class="selection-info">
+          <svg data-p-icon="paperclip" aria-hidden="true"></svg>
+          <span aria-live="polite">
+            {{ selectedFileIds().length }} arquivo(s) selecionado(s) —
+            {{
+              includeRelatedFiles()
+                ? 'arquivos relacionados também serão buscados'
+                : 'somente estes serão usados'
+            }}
+          </span>
+        </div>
+        <button
+          pButton
+          type="button"
+          text
+          rounded
+          size="small"
+          aria-label="Limpar seleção de arquivos"
+          title="Limpar seleção"
+          (click)="clearSelection.emit()"
+        >
+          <svg data-p-icon="times" pButtonIcon aria-hidden="true"></svg>
+        </button>
+      </div>
+    }
+
+    <div class="chat-input-area">
+      <textarea
+        [ngModel]="prompt()"
+        (ngModelChange)="prompt.set($event)"
+        placeholder="Digite sua mensagem..."
+        (keydown.enter)="enviarComEnter($event)"
+        [disabled]="loading()"
+      ></textarea>
+      <button
+        class="btn-primary"
+        type="button"
+        (click)="enviar()"
+        [disabled]="loading() || !prompt().trim()"
+      >
+        Enviar
+      </button>
+    </div>
+  </footer>
+</div>

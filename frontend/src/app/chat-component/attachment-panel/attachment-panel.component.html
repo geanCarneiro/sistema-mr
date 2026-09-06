@@ -1,0 +1,124 @@
+<aside class="files-panel">
+  <div class="files-header">
+    <div class="files-title-row">
+      <h3>Arquivos da conversa</h3>
+      <p>
+        Sem seleção, a busca é automática. Com seleção, somente os arquivos escolhidos serão usados.
+      </p>
+    </div>
+    <div class="file-options-row">
+      <button
+        pButton
+        type="button"
+        [attr.aria-label]="uploading() ? 'Enviando arquivos' : 'Adicionar arquivos'"
+        [attr.title]="uploading() ? 'Enviando arquivos' : 'Adicionar arquivos'"
+        [disabled]="uploading()"
+        (click)="abrirSeletorDeArquivos()"
+      >
+        @if (uploading()) {
+          <svg data-p-icon="refresh" pButtonIcon [spin]="true" aria-hidden="true"></svg>
+        } @else {
+          <svg data-p-icon="plus" pButtonIcon aria-hidden="true"></svg>
+        }
+      </button>
+      <input
+        #fileInput
+        type="file"
+        multiple
+        hidden
+        (change)="selecionarArquivos($event)"
+        [disabled]="uploading()"
+      />
+      <div class="related-files-option">
+        <label for="include-related-files">Também buscar arquivos relacionados</label>
+        <p-checkbox
+          inputId="include-related-files"
+          [binary]="true"
+          [ngModel]="includeRelatedFiles()"
+          [disabled]="selectedFileIds().length === 0"
+          (onChange)="definirBuscaRelacionada($event.checked === true)"
+        />
+      </div>
+      <span class="visually-hidden" role="status" aria-live="polite">
+        {{ uploading() ? 'Enviando arquivos' : '' }}
+      </span>
+      @if (uploadError()) {
+        <p class="upload-error">{{ uploadError() }}</p>
+      }
+      @if (selectionError()) {
+        <p class="selection-error">{{ selectionError() }}</p>
+      }
+    </div>
+  </div>
+
+  <div class="files-list">
+    @for (file of files(); track file.id) {
+      <article
+        class="file-card"
+        [class.selected]="anexoSelecionado(file.id)"
+        [class.selectable]="file.status === 'READY'"
+        [class.failed]="file.status === 'FAILED'"
+      >
+        <div class="file-checkbox">
+          <p-checkbox
+            [inputId]="'file-' + file.id"
+            [binary]="true"
+            [ngModel]="anexoSelecionado(file.id)"
+            [disabled]="file.status !== 'READY'"
+            [ariaLabel]="'Selecionar ' + file.name"
+            (onChange)="alternarAnexo(file)"
+          />
+        </div>
+        <label class="file-content" [for]="'file-' + file.id">
+          <span class="file-name" [title]="file.name">{{ file.name }}</span>
+          <span class="file-meta">
+            {{ file.size / 1024 | number: '1.0-1' }} KB ·
+            <span [class.status-failed]="file.status === 'FAILED'">{{
+              statusLabel(file.status)
+            }}</span>
+          </span>
+          @if (file.errorMessage) {
+            <span class="file-error" [title]="file.errorMessage">{{ file.errorMessage }}</span>
+          }
+        </label>
+        <div class="file-actions">
+          @if (file.status === 'FAILED') {
+            <button
+              pButton
+              type="button"
+              severity="warn"
+              [attr.aria-label]="'Reprocessar ' + file.name"
+              title="Reprocessar arquivo"
+              (click)="reprocessarArquivo(file)"
+            >
+              <svg data-p-icon="refresh" pButtonIcon aria-hidden="true"></svg>
+            </button>
+          }
+          <button
+            pButton
+            type="button"
+            [attr.aria-label]="'Baixar ' + file.name"
+            title="Baixar original"
+            (click)="baixarArquivo(file)"
+          >
+            <svg data-p-icon="cloud-download" pButtonIcon aria-hidden="true"></svg>
+          </button>
+          <button
+            pButton
+            type="button"
+            severity="danger"
+            [attr.aria-label]="'Excluir ' + file.name"
+            title="Excluir arquivo"
+            (click)="removerArquivo(file)"
+          >
+            <svg data-p-icon="trash" pButtonIcon aria-hidden="true"></svg>
+          </button>
+        </div>
+      </article>
+    } @empty {
+      <div class="files-empty">
+        PDFs, documentos, apresentações e imagens com OCR aparecerão aqui.
+      </div>
+    }
+  </div>
+</aside>

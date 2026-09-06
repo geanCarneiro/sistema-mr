@@ -1,54 +1,24 @@
-import {
-  AfterViewChecked,
-  Component,
-  ElementRef,
-  OnDestroy,
-  OnInit,
-  signal,
-  ViewChild,
-  WritableSignal,
-} from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Component, OnDestroy, OnInit, signal, WritableSignal } from '@angular/core';
 import { AiChatService } from '../../shared/service/ai_chat.service';
-import { IChatMessage, IGroundingFile } from '../../shared/interface/chat_message.interface';
-import { AuthService, IUserData } from '../../shared/service/auth.service';
 import { IChatFile } from '../../shared/interface/chat_file.interface';
-import { ButtonDirective, ButtonIcon } from 'primeng/button';
-import { Checkbox } from 'primeng/checkbox';
-import { Plus } from '@primeicons/angular/plus';
-import { Refresh } from '@primeicons/angular/refresh';
-import { CloudDownload } from '@primeicons/angular/cloud-download';
-import { Trash } from '@primeicons/angular/trash';
-import { Times } from '@primeicons/angular/times';
-import { Paperclip } from '@primeicons/angular/paperclip';
+import { IChatMessage } from '../../shared/interface/chat_message.interface';
+import { AuthService, IUserData } from '../../shared/service/auth.service';
+import {
+  ChatConversationComponent,
+  ChatSubmitEvent,
+} from './chat-conversation/chat-conversation.component';
+import { AttachmentPanelComponent } from './attachment-panel/attachment-panel.component';
 
 @Component({
   selector: 'app-chat-component',
-  imports: [
-    CommonModule,
-    FormsModule,
-    ButtonDirective,
-    ButtonIcon,
-    Checkbox,
-    Plus,
-    Refresh,
-    CloudDownload,
-    Trash,
-    Times,
-    Paperclip,
-  ],
+  imports: [ChatConversationComponent, AttachmentPanelComponent],
   templateUrl: './chat.component.html',
   styleUrl: './chat.component.scss',
 })
-export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
-  @ViewChild('scrollContainer') private scrollContainer!: ElementRef<HTMLElement>;
-  @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
-
+export class ChatComponent implements OnInit, OnDestroy {
   private static readonly MAX_SELECTED_FILES = 10;
 
   messages: WritableSignal<IChatMessage[]>;
-  prompt = signal<string>('');
   loading: WritableSignal<boolean>;
   files: WritableSignal<IChatFile[]>;
   uploading: WritableSignal<boolean>;
@@ -57,7 +27,6 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
   includeRelatedFiles = signal(false);
   selectionError = signal<string | null>(null);
   userData: IUserData | null;
-  private renderedMessageCount = -1;
   private filePolling?: ReturnType<typeof setInterval>;
 
   constructor(
@@ -72,7 +41,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.userData = this.authService.userData;
   }
 
-  ngOnInit() {
+  ngOnInit(): void {
     this.aiChatService.carregarHistorico();
     this.aiChatService.carregarArquivos();
     this.filePolling = setInterval(() => {
@@ -86,34 +55,19 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     if (this.filePolling) clearInterval(this.filePolling);
   }
 
-  ngAfterViewChecked() {
-    if (this.renderedMessageCount !== this.messages().length) {
-      this.renderedMessageCount = this.messages().length;
-      this.scrollToBottom();
-    }
-  }
-
-  recarregarChat() {
+  recarregarChat(): void {
     this.aiChatService.carregarHistorico();
   }
 
-  enviar() {
-    const prompt = this.prompt().trim();
-    if (!prompt || this.loading()) return;
+  enviar(event: ChatSubmitEvent): void {
+    if (!event.prompt || this.loading()) return;
 
-    this.aiChatService.enviar(prompt, this.selectedFileIds(), this.includeRelatedFiles());
-    this.prompt.set('');
+    this.aiChatService.enviar(event.prompt, [...event.attachmentIds], event.includeRelatedFiles);
     this.limparSelecao();
   }
 
-  abrirSeletorDeArquivos(): void {
-    if (!this.uploading()) this.fileInput?.nativeElement.click();
-  }
-
-  selecionarArquivos(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.aiChatService.enviarArquivos(Array.from(input.files ?? []));
-    input.value = '';
+  selecionarArquivos(files: File[]): void {
+    this.aiChatService.enviarArquivos(files);
   }
 
   alternarAnexo(file: IChatFile): void {
@@ -135,10 +89,6 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
 
     this.selectedFileIds.set([...selectedIds, file.id]);
     this.selectionError.set(null);
-  }
-
-  anexoSelecionado(id: string): boolean {
-    return this.selectedFileIds().includes(id);
   }
 
   definirBuscaRelacionada(checked: boolean): void {
@@ -172,30 +122,7 @@ export class ChatComponent implements OnInit, AfterViewChecked, OnDestroy {
     return ['QUEUED', 'EXTRACTING', 'EMBEDDING'].includes(file.status);
   }
 
-  statusLabel(status: IChatFile['status']): string {
-    return {
-      QUEUED: 'Na fila',
-      EXTRACTING: 'Extraindo texto/OCR',
-      EMBEDDING: 'Gerando embeddings',
-      READY: 'Pronto',
-      FAILED: 'Falhou',
-    }[status];
-  }
-
-  sourceAccessibilityLabel(source: IGroundingFile): string {
-    return source.available === false
-      ? `Fonte ${source.name}. Arquivo não está mais disponível.`
-      : `Fonte ${source.name}. Arquivo utilizado na resposta.`;
-  }
-
   logout(): void {
     this.authService.logout();
-  }
-
-  private scrollToBottom(): void {
-    try {
-      this.scrollContainer.nativeElement.scrollTop =
-        this.scrollContainer.nativeElement.scrollHeight;
-    } catch (err) {}
   }
 }

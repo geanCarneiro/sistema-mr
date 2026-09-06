@@ -47,18 +47,21 @@ describe('ChatComponent', () => {
       loading: signal(false),
       files: signal<IChatFile[]>([]),
       uploading: signal(false),
-      uploadError: signal(null),
+      uploadError: signal<string | null>(null),
       carregarHistorico: vi.fn(),
       carregarArquivos: vi.fn(),
       enviar: vi.fn(),
       enviarArquivos: vi.fn(),
       removerArquivo: vi.fn(),
       baixarArquivo: vi.fn(),
+      reprocessarArquivo: vi.fn(),
     };
   }
 
-  it('should create', () => {
+  it('should create and load the conversation resources', () => {
     expect(component).toBeTruthy();
+    expect(aiChatService.carregarHistorico).toHaveBeenCalledOnce();
+    expect(aiChatService.carregarArquivos).toHaveBeenCalledOnce();
   });
 
   it('selects only ready files and clears the hybrid option with the selection', () => {
@@ -78,12 +81,15 @@ describe('ChatComponent', () => {
     expect(component.includeRelatedFiles()).toBe(false);
   });
 
-  it('sends the explicit and related-file choices', () => {
-    component.prompt.set('  Compare os documentos  ');
+  it('sends the explicit and related-file choices from the conversation event', () => {
     component.selectedFileIds.set(['ready']);
     component.includeRelatedFiles.set(true);
 
-    component.enviar();
+    component.enviar({
+      prompt: 'Compare os documentos',
+      attachmentIds: component.selectedFileIds(),
+      includeRelatedFiles: component.includeRelatedFiles(),
+    });
 
     expect(aiChatService.enviar).toHaveBeenCalledWith('Compare os documentos', ['ready'], true);
     expect(component.selectedFileIds()).toEqual([]);
@@ -99,24 +105,19 @@ describe('ChatComponent', () => {
     expect(component.selectionError()).toBe('Selecione no máximo 10 anexos.');
   });
 
-  it('provides accessible names for icon-only file actions', () => {
-    aiChatService.files.set([file('manual', 'READY')]);
-    fixture.detectChanges();
+  it('coordinates file actions through the chat service', () => {
+    const ready = file('ready', 'READY');
+    const failed = file('failed', 'FAILED');
 
-    const element = fixture.nativeElement as HTMLElement;
-    const addButton = element.querySelector<HTMLButtonElement>(
-      'button[aria-label="Adicionar arquivos"]',
-    );
-    const downloadButton = element.querySelector<HTMLButtonElement>(
-      'button[aria-label="Baixar manual.pdf"]',
-    );
-    const deleteButton = element.querySelector<HTMLButtonElement>(
-      'button[aria-label="Excluir manual.pdf"]',
-    );
+    component.selecionarArquivos([new File(['conteúdo'], 'manual.pdf')]);
+    component.baixarArquivo(ready);
+    component.removerArquivo(ready);
+    component.reprocessarArquivo(failed);
 
-    expect(addButton).not.toBeNull();
-    expect(downloadButton).not.toBeNull();
-    expect(deleteButton).not.toBeNull();
+    expect(aiChatService.enviarArquivos).toHaveBeenCalled();
+    expect(aiChatService.baixarArquivo).toHaveBeenCalledWith(ready);
+    expect(aiChatService.removerArquivo).toHaveBeenCalledWith('ready');
+    expect(aiChatService.reprocessarArquivo).toHaveBeenCalledWith('failed');
   });
 
   function file(id: string, status: IChatFile['status']): IChatFile {

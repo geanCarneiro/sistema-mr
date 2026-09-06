@@ -64,6 +64,30 @@ python:
 
 app:
   ai:
+    runtime:
+      default-route: gemini-chat
+      limits:
+        max-steps: 8
+        max-model-invocations: 8
+        max-tool-calls: 8
+        max-duration-seconds: 90
+        max-context-tokens: 200000
+        max-output-tokens: 8192
+      routes:
+        - id: gemini-chat
+          provider: google-gemini
+          model: gemini-3.1-flash-lite
+          enabled: true
+          input-token-limit: 1048576
+          output-token-limit: 65536
+          capabilities:
+            function-calling: true
+            structured-output: true
+            thinking: true
+          quota:
+            requests-per-minute: 15
+            input-tokens-per-minute: 250000
+            requests-per-day: 500
     document-vision:
       model: gemini-3.1-flash-lite
       temperature: 0.0

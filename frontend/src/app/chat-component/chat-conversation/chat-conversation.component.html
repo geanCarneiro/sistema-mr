@@ -1,12 +1,45 @@
 <div class="chat-wrapper">
   <header class="chat-header">
-    <h2>AI Chat Sandbox</h2>
-    <div class="header-actions">
-      <button class="btn-secondary" type="button" (click)="reloadHistory.emit()">
-        🔄 Histórico
-      </button>
-      <button class="btn-secondary" type="button" (click)="logout.emit()">Sair</button>
+    <div class="chat-header-main">
+      <h2>Sistema MR</h2>
+      <div class="header-actions">
+        <button class="btn-secondary" type="button" (click)="reloadHistory.emit()">
+          🔄 Histórico
+        </button>
+        <button class="btn-secondary" type="button" (click)="logout.emit()">Sair</button>
+      </div>
     </div>
+
+    @if (getGeneralSubject(); as generalSubject) {
+      <nav class="subject-navigation" aria-label="Assuntos da conversa">
+        <div class="subject-tabs" role="tablist" aria-label="Assuntos">
+          <button
+            type="button"
+            role="tab"
+            class="subject-tab general-tab"
+            [class.active]="activeSubjectId() === generalSubject.id"
+            [attr.aria-selected]="activeSubjectId() === generalSubject.id"
+            (click)="subjectSelected.emit(generalSubject)"
+          >
+            {{ generalSubject.title }}
+          </button>
+          @for (subject of subjects(); track subject.id) {
+            @if (subject.id !== generalSubject.id) {
+              <button
+                type="button"
+                role="tab"
+                class="subject-tab"
+                [class.active]="activeSubjectId() === subject.id"
+                [attr.aria-selected]="activeSubjectId() === subject.id"
+                (click)="subjectSelected.emit(subject)"
+              >
+                {{ subject.title }}
+              </button>
+            }
+          }
+        </div>
+      </nav>
+    }
   </header>
 
   <main class="chat-history" #scrollContainer>

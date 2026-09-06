@@ -950,3 +950,44 @@ O contrato pode evoluir durante a implementação, mas mudanças que alterem o
 significado de `Assunto`, `AgentRun`, estados, seleção de provider, associação de
 mensagens ou regras de retomada devem atualizar este documento antes de serem
 adotadas nas Issues dependentes.
+
+### 15.5 Implementação inicial da BL-024
+
+A primeira implementação concreta mantém o endpoint de chat compatível, mas
+move sua orquestração para um serviço de aplicação e para o `AgentRuntime`.
+O controller não escolhe diretamente o `ChatModel`, prepara o grounding nem
+persiste a interação.
+
+O runtime depende de um `ModelGateway`. A primeira rota configurada é o adapter
+do Gemini, mas o provider e o model são registrados em um catálogo configurável
+e a seleção informa o motivo utilizado. A política de dados é transportada no
+`ModelRequest` como restrição de execução, sem ser implementada pelo runtime
+nesta etapa; a decisão efetiva ficará na BL-019.
+
+O `conversationId` continua sendo o limite interno da conversa universal de um
+usuário, resolvido deterministicamente como `chat-<ownerSubject>`. Ele não faz
+parte da experiência pública do frontend e não é substituído pelo `subjectId`:
+assuntos são o contexto presumido de um `AgentRun` e uma projeção de navegação,
+enquanto histórico, memória e anexos continuam universais ao usuário.
+
+O endpoint de assuntos fornece a base para as abas do chat. A aba geral fica
+fixa e os demais assuntos podem rolar horizontalmente. A seleção envia somente
+o `subjectId`; o backend resolve o contexto, valida a posse do assunto e usa o
+mesmo `conversationId` universal para memória, histórico e anexos.
+
+Chamadas de ferramentas passam a ser reservadas antes da execução com uma chave
+composta por `runId` e `toolCallId`. Isso impede a repetição silenciosa de uma
+operação quando uma execução é retomada ou sofre uma falha entre a execução e o
+registro do resultado.
+
+O estado do `AgentRun` é persistido no Neo4j, mas a fila inicial é mantida em
+memória. Após reinício, runs em estados retomáveis são reidratados na fila a
+partir do estado persistido; o banco não é tratado como uma fila volátil. A
+reconstrução automática do contexto completo de mensagens e callbacks ainda é
+uma etapa posterior do runtime.
+
+Para a configuração atual do projeto, a rota `gemini-3.1-flash-lite` registra
+limite técnico de 1.048.576 tokens de entrada e 65.536 de saída. A quota
+operacional observada no AI Studio para o nível gratuito é de 15 RPM, 250.000
+TPM e 500 RPD. Esses valores são limites do projeto e devem continuar
+configuráveis, distintos do orçamento por `AgentRun`.

@@ -55,6 +55,9 @@ describe('ChatComponent', () => {
       removerArquivo: vi.fn(),
       baixarArquivo: vi.fn(),
       reprocessarArquivo: vi.fn(),
+      carregarAssuntos: vi.fn(() => ({
+        subscribe: ({ next }: { next: (subjects: never[]) => void }) => next([]),
+      })),
     };
   }
 
@@ -91,7 +94,12 @@ describe('ChatComponent', () => {
       includeRelatedFiles: component.includeRelatedFiles(),
     });
 
-    expect(aiChatService.enviar).toHaveBeenCalledWith('Compare os documentos', ['ready'], true);
+    expect(aiChatService.enviar).toHaveBeenCalledWith(
+      'Compare os documentos',
+      ['ready'],
+      true,
+      null,
+    );
     expect(component.selectedFileIds()).toEqual([]);
     expect(component.includeRelatedFiles()).toBe(false);
   });

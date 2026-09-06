@@ -1,4 +1,4 @@
-package br.com.geangc.sistema_mr.configuration;
+package br.com.geangc.sistema_mr.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -8,13 +8,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
-class TransactionalChatMemoryAdvisorTest {
+class ChatMemoryMessageFormatterTest {
 
     private static final String TIMESTAMP = "2026-08-29T01:00:00Z";
 
     @Test
     void canonicalUserMessageStoresOriginalTextWithoutRawContent() {
-        UserMessage stored = TransactionalChatMemoryAdvisor.canonicalUserMessage("pergunta original", TIMESTAMP);
+        UserMessage stored = ChatMemoryMessageFormatter.canonicalUserMessage("pergunta original", TIMESTAMP);
 
         assertEquals("pergunta original", stored.getText());
         assertEquals(TIMESTAMP, stored.getMetadata().get("timestamp"));
@@ -28,7 +28,7 @@ class TransactionalChatMemoryAdvisorTest {
                 .metadata(Map.of("timestamp", TIMESTAMP))
                 .build();
 
-        var modelMessage = TransactionalChatMemoryAdvisor.messageForModel(stored);
+        var modelMessage = ChatMemoryMessageFormatter.messageForModel(stored);
 
         assertEquals("pergunta original", stored.getText());
         assertEquals("[2026-08-29T01:00:00Z] pergunta original", modelMessage.getText());
@@ -41,7 +41,7 @@ class TransactionalChatMemoryAdvisorTest {
                 .properties(Map.of("timestamp", TIMESTAMP))
                 .build();
 
-        var modelMessage = TransactionalChatMemoryAdvisor.messageForModel(stored);
+        var modelMessage = ChatMemoryMessageFormatter.messageForModel(stored);
 
         assertEquals("resposta original", stored.getText());
         assertEquals("[2026-08-29T01:00:00Z] resposta original", modelMessage.getText());
@@ -57,7 +57,7 @@ class TransactionalChatMemoryAdvisorTest {
                 ))
                 .build();
 
-        var modelMessage = TransactionalChatMemoryAdvisor.messageForModel(legacy);
+        var modelMessage = ChatMemoryMessageFormatter.messageForModel(legacy);
 
         assertEquals("[2026-08-29T01:00:00Z] pergunta antiga", modelMessage.getText());
     }

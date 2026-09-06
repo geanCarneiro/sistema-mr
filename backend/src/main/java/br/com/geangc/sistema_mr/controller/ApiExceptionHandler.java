@@ -4,6 +4,8 @@ import java.time.Instant;
 import java.util.UUID;
 import br.com.geangc.sistema_mr.service.DocumentNotFoundException;
 import br.com.geangc.sistema_mr.service.GroundingContextLimitException;
+import br.com.geangc.sistema_mr.service.SubjectNotFoundException;
+import br.com.geangc.sistema_mr.agent.service.AgentRunUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -41,9 +43,21 @@ public class ApiExceptionHandler {
                 .body(new ApiError(exception.getMessage(), Instant.now(), null));
     }
 
+    @ExceptionHandler(SubjectNotFoundException.class)
+    public ResponseEntity<ApiError> handleSubjectNotFound(SubjectNotFoundException exception) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiError(exception.getMessage(), Instant.now(), null));
+    }
+
     @ExceptionHandler(GroundingContextLimitException.class)
     public ResponseEntity<ApiError> handleContextLimit(GroundingContextLimitException exception) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ApiError(exception.getMessage(), Instant.now(), null));
+    }
+
+    @ExceptionHandler(AgentRunUnavailableException.class)
+    public ResponseEntity<ApiError> handleAgentRunUnavailable(AgentRunUnavailableException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiError(exception.getMessage(), Instant.now(), null));
     }
 

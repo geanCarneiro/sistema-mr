@@ -1,5 +1,5 @@
 import { Component, OnDestroy, OnInit, signal, WritableSignal } from '@angular/core';
-import { AiChatService } from '../../shared/service/ai_chat.service';
+import { AiChatService, IChatSubject } from '../../shared/service/ai_chat.service';
 import { IChatFile } from '../../shared/interface/chat_file.interface';
 import { IChatMessage } from '../../shared/interface/chat_message.interface';
 import { AuthService, IUserData } from '../../shared/service/auth.service';
@@ -26,6 +26,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   selectedFileIds = signal<string[]>([]);
   includeRelatedFiles = signal(false);
   selectionError = signal<string | null>(null);
+  subjects = signal<IChatSubject[]>([]);
+  activeSubjectId = signal<string | null>(null);
   userData: IUserData | null;
   private filePolling?: ReturnType<typeof setInterval>;
 
@@ -42,6 +44,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.carregarAssuntos();
     this.aiChatService.carregarHistorico();
     this.aiChatService.carregarArquivos();
     this.filePolling = setInterval(() => {
@@ -49,6 +52,22 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.aiChatService.carregarArquivos();
       }
     }, 2500);
+  }
+
+  carregarAssuntos(): void {
+    this.aiChatService.carregarAssuntos().subscribe({
+      next: (subjects) => {
+        this.subjects.set(subjects);
+        if (!this.activeSubjectId() && subjects.length) {
+          this.activeSubjectId.set(subjects[0].id);
+        }
+      },
+      error: (err) => console.error('Erro ao carregar assuntos', err),
+    });
+  }
+
+  selecionarAssunto(subject: IChatSubject): void {
+    this.activeSubjectId.set(subject.id);
   }
 
   ngOnDestroy(): void {
@@ -62,7 +81,12 @@ export class ChatComponent implements OnInit, OnDestroy {
   enviar(event: ChatSubmitEvent): void {
     if (!event.prompt || this.loading()) return;
 
-    this.aiChatService.enviar(event.prompt, [...event.attachmentIds], event.includeRelatedFiles);
+    this.aiChatService.enviar(
+      event.prompt,
+      [...event.attachmentIds],
+      event.includeRelatedFiles,
+      this.activeSubjectId(),
+    );
     this.limparSelecao();
   }
 

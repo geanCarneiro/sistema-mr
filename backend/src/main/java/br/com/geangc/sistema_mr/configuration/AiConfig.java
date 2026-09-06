@@ -4,12 +4,10 @@
  */
 package br.com.geangc.sistema_mr.configuration;
 
-import br.com.geangc.sistema_mr.tool_calling.PythonToolConfig;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import org.neo4j.driver.Driver;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -18,9 +16,11 @@ import org.springframework.ai.chat.memory.repository.neo4j.Neo4jChatMemoryReposi
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
+import org.springframework.ai.model.tool.DefaultToolCallingManager;
+import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.Resource;
 import org.springframework.beans.factory.annotation.Value;
 
@@ -43,36 +43,28 @@ public class AiConfig {
         return new SanitizedNeo4jChatMemoryRepository(targetRepository);
     }
     
-    private ChatMemory createChatMemory(ChatMemoryRepository repository) {
-                
+    @Bean
+    public ChatMemory chatMemory(ChatMemoryRepository repository) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
                 .maxMessages(20)
                 .build();
     }
-    
-    
+
     @Bean
-    @Primary
-    public ChatClient chatClient(
-            ChatModel chatModel, 
-            ChatMemoryRepository repository,
-            PythonToolConfig pythonToolConfig,
+    public ToolCallingManager toolCallingManager() {
+        return DefaultToolCallingManager.builder().build();
+    }
+
+    @Bean("chatSystemInstruction")
+    public String chatSystemInstruction(
             @Value("classpath:prompts/system-instruction.md") Resource systemInstruction
     ) throws IOException {
-        
-        ChatMemory chatMemory = createChatMemory(repository);
-        
-        final String systemPrompt = systemInstruction.getContentAsString(StandardCharsets.UTF_8).strip();
-        if (systemPrompt.isBlank()) {
+        String content = systemInstruction.getContentAsString(StandardCharsets.UTF_8).strip();
+        if (content.isBlank()) {
             throw new IllegalStateException("A instrução de sistema não pode estar vazia");
         }
-        
-        return ChatClient.builder(chatModel)
-                .defaultSystem(systemPrompt)
-                .defaultAdvisors(new TransactionalChatMemoryAdvisor(chatMemory), new SimpleLoggerAdvisor())
-                .defaultTools(pythonToolConfig)
-                .build();
+        return content;
     }
 
     @Bean("documentVisionChatClient")

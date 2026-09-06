@@ -10,6 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IChatMessage, IGroundingFile } from '../../../shared/interface/chat_message.interface';
+import { IChatSubject } from '../../../shared/service/ai_chat.service';
 import { ButtonDirective, ButtonIcon } from 'primeng/button';
 import { Times } from '@primeicons/angular/times';
 import { Paperclip } from '@primeicons/angular/paperclip';
@@ -32,10 +33,13 @@ export class ChatConversationComponent implements AfterViewChecked {
   messages = input.required<IChatMessage[]>();
   loading = input(false);
   userName = input<string | null>(null);
+  subjects = input<IChatSubject[]>([]);
+  activeSubjectId = input<string | null>(null);
   selectedFileIds = input<readonly string[]>([]);
   includeRelatedFiles = input(false);
 
   submit = output<ChatSubmitEvent>();
+  subjectSelected = output<IChatSubject>();
   reloadHistory = output<void>();
   clearSelection = output<void>();
   logout = output<void>();
@@ -65,6 +69,11 @@ export class ChatConversationComponent implements AfterViewChecked {
   enviarComEnter(event: Event): void {
     event.preventDefault();
     this.enviar();
+  }
+
+  getGeneralSubject(): IChatSubject | null {
+    const subjects = this.subjects();
+    return subjects.find((subject) => subject.kind === 'GENERAL_CHAT') ?? subjects[0] ?? null;
   }
 
   sourceAccessibilityLabel(source: IGroundingFile): string {

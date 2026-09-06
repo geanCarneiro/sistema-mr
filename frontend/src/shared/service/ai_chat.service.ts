@@ -14,6 +14,13 @@ export interface IChatResponse {
   groundingFiles?: IGroundingFile[];
 }
 
+export interface IChatSubject {
+  id: string;
+  title: string;
+  kind: string;
+  createdAt?: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AiChatService {
   private readonly urlBase = '/api/ai/chat';
@@ -26,7 +33,12 @@ export class AiChatService {
 
   constructor(private readonly http: HttpClient) {}
 
-  public enviar(prompt: string, attachmentIds: string[] = [], includeRelatedFiles = false): void {
+  public enviar(
+    prompt: string,
+    attachmentIds: string[] = [],
+    includeRelatedFiles = false,
+    subjectId: string | null = null,
+  ): void {
     prompt = prompt?.trim();
     if (!prompt || this.loading()) return;
 
@@ -48,7 +60,7 @@ export class AiChatService {
     this.loading.set(true);
 
     // Payload enviado ao back-end
-    const payload = { prompt, attachmentIds, includeRelatedFiles };
+    const payload = { prompt, attachmentIds, includeRelatedFiles, subjectId };
 
     this.http
       .post<IChatResponse>(this.urlBase, payload)
@@ -103,6 +115,10 @@ export class AiChatService {
       },
       error: (err) => console.error('Error ao carregar historico', err),
     });
+  }
+
+  public carregarAssuntos() {
+    return this.http.get<IChatSubject[]>(`${this.urlBase}/subjects`);
   }
 
   public carregarArquivos(): void {

@@ -3,6 +3,7 @@ package br.com.geangc.sistema_mr.controller;
 import br.com.geangc.sistema_mr.controller.dto.ChatFileDto;
 import br.com.geangc.sistema_mr.model.ChatFile;
 import br.com.geangc.sistema_mr.service.DocumentService;
+import br.com.geangc.sistema_mr.service.ConversationScopeService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
@@ -27,9 +28,14 @@ import org.springframework.web.multipart.MultipartFile;
 public class ChatFileController {
 
     private final DocumentService documentService;
+    private final ConversationScopeService conversationScopeService;
 
-    public ChatFileController(DocumentService documentService) {
+    public ChatFileController(
+            DocumentService documentService,
+            ConversationScopeService conversationScopeService
+    ) {
         this.documentService = documentService;
+        this.conversationScopeService = conversationScopeService;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -38,19 +44,23 @@ public class ChatFileController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(documentService.upload(
-                files, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject()
+                files, conversationScopeService.resolve(jwt.getSubject()).conversationId(), jwt.getSubject()
         ).stream().map(ChatFileDto::from).toList());
     }
 
     @GetMapping
     public List<ChatFileDto> list(@AuthenticationPrincipal Jwt jwt) {
-        return documentService.list(AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject())
+        return documentService.list(conversationScopeService.resolve(jwt.getSubject()).conversationId(), jwt.getSubject())
                 .stream().map(ChatFileDto::from).toList();
     }
 
     @GetMapping("/{id}/download")
     public ResponseEntity<?> download(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-        var download = documentService.download(id, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject());
+        var download = documentService.download(
+                id,
+                conversationScopeService.resolve(jwt.getSubject()).conversationId(),
+                jwt.getSubject()
+        );
         MediaType mediaType;
         try {
             mediaType = MediaType.parseMediaType(download.file().mimeType());
@@ -68,13 +78,17 @@ public class ChatFileController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-        documentService.delete(id, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject());
+        documentService.delete(id, conversationScopeService.resolve(jwt.getSubject()).conversationId(), jwt.getSubject());
         return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/{id}/retry")
     public ResponseEntity<ChatFileDto> retry(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
-        ChatFile file = documentService.retry(id, AiController.conversationIdFor(jwt.getSubject()), jwt.getSubject());
+        ChatFile file = documentService.retry(
+                id,
+                conversationScopeService.resolve(jwt.getSubject()).conversationId(),
+                jwt.getSubject()
+        );
         return ResponseEntity.ok(ChatFileDto.from(file));
     }
 }

@@ -1,6 +1,7 @@
 package br.com.geangc.sistema_mr.agent.tool;
 
 import br.com.geangc.sistema_mr.tool_calling.PythonToolConfig;
+import br.com.geangc.sistema_mr.memory.tool.SemanticMemoryToolConfig;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.ai.support.ToolCallbacks;
@@ -12,29 +13,23 @@ public class AgentToolRegistry {
 
     private final List<AgentTool> tools;
 
-    public AgentToolRegistry(PythonToolConfig pythonToolConfig) {
-        ToolCallback[] callbacks = ToolCallbacks.from(pythonToolConfig);
-        if (callbacks.length != 1) {
-            throw new IllegalStateException("A ferramenta Python deve registrar exatamente um callback");
-        }
-        ToolCallback pythonCallback = callbacks[0];
-        var definition = pythonCallback.getToolDefinition();
-        this.tools = List.of(new AgentTool(
-                definition.name(),
-                "1",
-                definition.description(),
-                definition.inputSchema(),
-                ToolRisk.LOW,
-                AutonomyLevel.EXECUTE,
-                java.util.Set.of(),
-                Duration.ofSeconds(12),
-                1,
-                true,
-                pythonCallback
-        ));
+    public AgentToolRegistry(PythonToolConfig pythonToolConfig, SemanticMemoryToolConfig memoryToolConfig) {
+        ToolCallback[] callbacks = ToolCallbacks.from(pythonToolConfig, memoryToolConfig);
+        this.tools = java.util.Arrays.stream(callbacks).map(this::toAgentTool).toList();
     }
 
     public List<AgentTool> all() {
         return tools;
+    }
+
+    private AgentTool toAgentTool(ToolCallback callback) {
+        var definition = callback.getToolDefinition();
+        boolean memoryRead = "searchSemanticMemory".equals(definition.name());
+        return new AgentTool(
+                definition.name(), "1", definition.description(), definition.inputSchema(),
+                memoryRead || "executePythonCode".equals(definition.name()) ? ToolRisk.LOW : ToolRisk.MEDIUM,
+                memoryRead ? AutonomyLevel.OBSERVE : AutonomyLevel.EXECUTE,
+                java.util.Set.of(), Duration.ofSeconds(memoryRead ? 5 : 12),
+                memoryRead ? 4 : 2, true, callback);
     }
 }

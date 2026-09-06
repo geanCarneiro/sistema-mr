@@ -1,5 +1,7 @@
 package br.com.geangc.sistema_mr.agent.service;
 
+import br.com.geangc.sistema_mr.agent.context.ContextSnapshot;
+import br.com.geangc.sistema_mr.agent.context.ContextSnapshotProvider;
 import br.com.geangc.sistema_mr.agent.gateway.ModelCapacityException;
 import br.com.geangc.sistema_mr.agent.gateway.ModelGateway;
 import br.com.geangc.sistema_mr.agent.gateway.ModelRequest;
@@ -22,12 +24,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -39,6 +44,7 @@ public class AgentRuntime {
     private final ToolExecutionPort toolExecutionPort;
     private final InMemoryRunScheduler scheduler;
     private final ToolAutonomyPolicy toolAutonomyPolicy;
+    private final ContextSnapshotProvider contextSnapshotProvider;
 
     public AgentRuntime(
             AgentRuntimeProperties properties,
@@ -48,12 +54,27 @@ public class AgentRuntime {
             InMemoryRunScheduler scheduler,
             ToolAutonomyPolicy toolAutonomyPolicy
     ) {
+        this(properties, repository, modelGateway, toolExecutionPort, scheduler, toolAutonomyPolicy,
+                ContextSnapshotProvider.empty());
+    }
+
+    @Autowired
+    public AgentRuntime(
+            AgentRuntimeProperties properties,
+            br.com.geangc.sistema_mr.agent.repository.AgentRunRepository repository,
+            ModelGateway modelGateway,
+            ToolExecutionPort toolExecutionPort,
+            InMemoryRunScheduler scheduler,
+            ToolAutonomyPolicy toolAutonomyPolicy,
+            ContextSnapshotProvider contextSnapshotProvider
+    ) {
         this.properties = properties;
         this.repository = repository;
         this.modelGateway = modelGateway;
         this.toolExecutionPort = toolExecutionPort;
         this.scheduler = scheduler;
         this.toolAutonomyPolicy = toolAutonomyPolicy;
+        this.contextSnapshotProvider = contextSnapshotProvider;
     }
 
     public AgentRunResult execute(AgentRunCommand command) {
@@ -83,7 +104,11 @@ public class AgentRuntime {
             throw new AgentRunUnavailableException("O assunto já possui uma execução em andamento");
         }
 
+        ContextSnapshot snapshot = contextSnapshotProvider.snapshot(
+                command.subjectId(), command.conversationId(), command.ownerSubject(), latestUserPrompt(command.messages()));
         List<Message> conversation = new ArrayList<>(command.messages());
+        conversation.add(Math.min(1, conversation.size()),
+                new org.springframework.ai.chat.messages.SystemMessage(snapshot.asModelText()));
         Instant deadline = createdAt.plus(Duration.ofSeconds(properties.limits().maxDurationSeconds()));
         int modelInvocations = 0;
         int toolCalls = 0;
@@ -116,6 +141,7 @@ public class AgentRuntime {
                         properties.defaultRouteConfig().id(),
                         conversation,
                         command.tools().stream().map(AgentTool::callback).toList(),
+                        toolContext(command),
                         command.dataConstraints(),
                         ProviderSelectionPolicy.AUTO,
                         properties.limits().maxSteps() - modelInvocations,
@@ -276,6 +302,24 @@ public class AgentRuntime {
             repository.fail(run.id(), run.ownerSubject(), exception.getMessage(), Instant.now());
             throw exception;
         }
+    }
+
+    private static Map<String, Object> toolContext(AgentRunCommand command) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("runId", command.runId().toString());
+        context.put("subjectId", command.subjectId().toString());
+        context.put("conversationId", command.conversationId());
+        context.put("ownerSubject", command.ownerSubject());
+        return context;
+    }
+
+    private static String latestUserPrompt(List<Message> messages) {
+        for (int index = messages.size() - 1; index >= 0; index--) {
+            if (messages.get(index) instanceof UserMessage userMessage) {
+                return userMessage.getText();
+            }
+        }
+        return "";
     }
 
     private AgentRunResult fail(AgentRun run, String reason) {

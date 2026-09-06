@@ -224,6 +224,24 @@ public class DynamicStateRepository {
         }
     }
 
+    public List<CurrentStateProjection> findCurrentProjections(String ownerSubject, String contextId, int limit) {
+        String query = """
+                MATCH (entity:Entidade {ownerSubject: $ownerSubject, contextId: $contextId})
+                      -[:POSSUI_ESTADO_ATUAL]->(current:EstadoAtual)
+                RETURN entity.id AS entityId, entity.type AS type,
+                       current.version AS version, current.payloadJson AS payloadJson,
+                       current.provenanceJson AS provenanceJson, current.confidence AS confidence,
+                       current.updatedAt AS updatedAt
+                ORDER BY current.updatedAt DESC
+                LIMIT $limit
+                """;
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(query, Map.of(
+                    "ownerSubject", ownerSubject, "contextId", contextId, "limit", limit
+            )).list(this::mapProjection));
+        }
+    }
+
     public List<StateTransition> findTransitions(UUID entityId, String ownerSubject, String contextId) {
         String query = """
                 MATCH (context:ContextoChat {id: $contextId, ownerSubject: $ownerSubject})

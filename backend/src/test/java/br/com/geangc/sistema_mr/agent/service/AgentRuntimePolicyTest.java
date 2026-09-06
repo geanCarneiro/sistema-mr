@@ -9,8 +9,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import br.com.geangc.sistema_mr.agent.gateway.ModelGateway;
+import br.com.geangc.sistema_mr.agent.gateway.ModelRequest;
 import br.com.geangc.sistema_mr.agent.gateway.ModelResponse;
 import br.com.geangc.sistema_mr.agent.gateway.ToolExecutionPort;
+import br.com.geangc.sistema_mr.agent.context.ContextSnapshot;
 import br.com.geangc.sistema_mr.agent.model.AgentRunCommand;
 import br.com.geangc.sistema_mr.agent.model.AgentRunResult;
 import br.com.geangc.sistema_mr.agent.model.AgentRunStatus;
@@ -28,6 +30,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -35,6 +38,34 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
 
 class AgentRuntimePolicyTest {
+
+    @Test
+    void mountsSnapshotAndBackendScopeInEachModelRequest() {
+        UUID runId = UUID.randomUUID();
+        AgentRunRepository repository = mock(AgentRunRepository.class);
+        ModelGateway modelGateway = mock(ModelGateway.class);
+        ToolExecutionPort toolExecutionPort = mock(ToolExecutionPort.class);
+        InMemoryRunScheduler scheduler = mock(InMemoryRunScheduler.class);
+        br.com.geangc.sistema_mr.agent.context.ContextSnapshotProvider snapshotProvider = mock(
+                br.com.geangc.sistema_mr.agent.context.ContextSnapshotProvider.class);
+        when(repository.claim(runId, "owner")).thenReturn(true);
+        when(snapshotProvider.snapshot(any(), eq("chat-owner"), eq("owner"), eq("Mensagem")))
+                .thenReturn(new ContextSnapshot(null, "chat-owner", List.of(), List.of(), List.of()));
+        when(modelGateway.invoke(any())).thenReturn(textModelResponse("Resposta"));
+
+        AgentRuntime runtime = new AgentRuntime(
+                properties(), repository, modelGateway, toolExecutionPort, scheduler,
+                new ToolAutonomyPolicy(), snapshotProvider);
+        AgentRunResult result = runtime.execute(command(runId));
+
+        assertEquals(AgentRunStatus.COMPLETED, result.status());
+        org.mockito.ArgumentCaptor<ModelRequest> request = org.mockito.ArgumentCaptor.forClass(ModelRequest.class);
+        verify(modelGateway).invoke(request.capture());
+        assertEquals("owner", request.getValue().toolContext().get("ownerSubject"));
+        assertEquals("chat-owner", request.getValue().toolContext().get("conversationId"));
+        assertEquals(1, request.getValue().messages().stream()
+                .filter(message -> message instanceof SystemMessage).count());
+    }
 
     @Test
     void returnsNaturalLanguageConfirmationWithoutExecutingTool() {
@@ -162,6 +193,14 @@ class AgentRuntimePolicyTest {
                 "model",
                 "test",
                 mock(Prompt.class),
+                new ChatResponse(List.of(new Generation(assistantMessage)))
+        );
+    }
+
+    private static ModelResponse textModelResponse(String content) {
+        AssistantMessage assistantMessage = AssistantMessage.builder().content(content).build();
+        return new ModelResponse(
+                "route", "provider", "model", "test", mock(Prompt.class),
                 new ChatResponse(List.of(new Generation(assistantMessage)))
         );
     }

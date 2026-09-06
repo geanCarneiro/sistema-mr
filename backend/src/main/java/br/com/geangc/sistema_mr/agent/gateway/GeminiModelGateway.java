@@ -39,6 +39,7 @@ public class GeminiModelGateway implements ModelGateway {
         GoogleGenAiChatOptions options = defaults.mutate()
                 .model(resolveModel(route.model()))
                 .toolCallbacks(request.tools())
+                .toolContext(request.toolContext())
                 .build();
         Prompt prompt = new Prompt(request.messages(), options);
 

@@ -171,6 +171,14 @@ public class DynamicStateService {
         );
     }
 
+    public List<CurrentStateProjection> currentProjections(String ownerSubject, String contextId, int limit) {
+        validateScope(ownerSubject, contextId);
+        if (limit < 1 || limit > 50) {
+            throw new IllegalArgumentException("O limite de estados deve estar entre 1 e 50");
+        }
+        return repository.findCurrentProjections(ownerSubject, contextId, limit);
+    }
+
     public Specification saveSpecification(
             UUID entityId,
             String ownerSubject,

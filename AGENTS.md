@@ -272,7 +272,7 @@ operacionais abaixo.
   corpo da mensagem. Os tipos padronizados do Conventional Commits, como `feat`,
   `fix` e `chore`, podem permanecer em sua forma convencional, assim como nomes
   próprios e identificadores técnicos quando necessário.
-- O corpo deve identificar a Issue atendida com `Issue: #<numero>`.
+- O corpo deve identificar a Issue atendida com `Issue: #<numero>`; em chores de manutenção sem Issue, use `Issue: N/A`.
 - O corpo deve conter uma seção `Changelog:` com uma lista objetiva das mudanças
   observáveis, sem incluir segredos, tokens ou valores sensíveis.
 - Exemplo:
@@ -286,3 +286,11 @@ operacionais abaixo.
   - adiciona a entidade Interacao e as fontes documentais utilizadas;
   - preserva as fontes no histórico e trata arquivos excluídos logicamente.
   ```
+
+## Padrão de branches e push
+
+- Ao fazer push, presuma a branch atualmente selecionada no checkout.
+- Não redirecione o push para `master`, `main` ou outra branch usando uma ref explícita, a menos que o usuário autorize essa branch na solicitação atual.
+- Se o checkout estiver em `HEAD detached`, não presuma uma branch de destino; identifique ou crie uma branch de trabalho antes de publicar.
+- Depois do push, confirme que a branch remota correspondente aponta para o commit publicado.
+- Criar, mesclar ou apagar uma Pull Request/branch exige solicitação explícita ou que essa ação faça parte do fluxo autorizado da Issue atual.

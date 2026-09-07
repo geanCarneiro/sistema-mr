@@ -4,6 +4,7 @@ import br.com.geangc.sistema_mr.agent.model.AgentRun;
 import br.com.geangc.sistema_mr.agent.model.AgentRunStatus;
 import br.com.geangc.sistema_mr.agent.model.AgentRunTrigger;
 import br.com.geangc.sistema_mr.agent.model.Subject;
+import br.com.geangc.sistema_mr.agent.gateway.ModelResponse;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.HashMap;
@@ -178,6 +179,8 @@ public class AgentRunRepository {
             String modelId,
             String selectionReason,
             boolean toolCallResponse,
+            ModelResponse.InvocationUsage usage,
+            String outcome,
             Instant startedAt,
             Instant completedAt
     ) {
@@ -193,6 +196,10 @@ public class AgentRunRepository {
                     modelId: $modelId,
                     selectionReason: $selectionReason,
                     toolCallResponse: $toolCallResponse,
+                    inputTokens: $inputTokens,
+                    outputTokens: $outputTokens,
+                    totalTokens: $totalTokens,
+                    outcome: $outcome,
                     startedAt: $startedAt,
                     completedAt: $completedAt
                 })
@@ -215,6 +222,10 @@ public class AgentRunRepository {
                 parameters.put("modelId", modelId);
                 parameters.put("selectionReason", selectionReason);
                 parameters.put("toolCallResponse", toolCallResponse);
+                parameters.put("inputTokens", usage == null ? null : usage.inputTokens());
+                parameters.put("outputTokens", usage == null ? null : usage.outputTokens());
+                parameters.put("totalTokens", usage == null ? null : usage.totalTokens());
+                parameters.put("outcome", outcome == null ? "UNKNOWN" : outcome);
                 parameters.put("startedAt", startedAt.toString());
                 parameters.put("completedAt", completedAt.toString());
                 var result = transaction.run(query, parameters);

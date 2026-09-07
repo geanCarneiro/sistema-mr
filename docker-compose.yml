@@ -166,6 +166,7 @@ services:
       - local_ai_models:/models
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=256m
+      - /opt/local-ai:rw,noexec,nosuid,size=512m,mode=1777
     cap_drop:
       - ALL
     security_opt:
@@ -175,6 +176,7 @@ services:
     cpus: 4.0
     environment:
       EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      EMBEDDING_MODEL_CACHE: /models
       EMBEDDING_DEVICE: cpu
       LOCAL_CHAT_MODEL_PATH: /models/gemma-3-4b-it-q4_0.gguf
       LOCAL_CHAT_MODEL_NAME: gemma-3-4b-it-q4

@@ -51,7 +51,8 @@ public class GeminiModelGateway implements ModelGateway {
                     route.model(),
                     "ONLY_ELIGIBLE_PROVIDER",
                     prompt,
-                    response
+                    response,
+                    ModelResponse.InvocationUsage.from(response)
             );
         } catch (RuntimeException exception) {
             if (isCapacityFailure(exception)) {

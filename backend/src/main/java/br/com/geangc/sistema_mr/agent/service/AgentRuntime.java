@@ -188,6 +188,8 @@ public class AgentRuntime {
                         modelResponse.modelId(),
                         modelResponse.selectionReason(),
                         modelResponse.hasToolCalls(),
+                        modelResponse.usage(),
+                        modelResponse.hasToolCalls() ? "TOOL_CALLS" : "FINAL_RESPONSE",
                         invocationStartedAt,
                         invocationCompletedAt
                 );

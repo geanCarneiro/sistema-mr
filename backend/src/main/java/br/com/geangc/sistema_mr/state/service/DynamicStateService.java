@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ public class DynamicStateService {
         this(repository, objectMapper, new FlexiblePayloadCodec(objectMapper));
     }
 
+    @Autowired
     public DynamicStateService(
             DynamicStateRepository repository,
             ObjectMapper objectMapper,

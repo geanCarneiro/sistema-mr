@@ -5,10 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import br.com.geangc.sistema_mr.agent.gateway.ModelGateway;
+import br.com.geangc.sistema_mr.agent.gateway.ModelCapacityException;
 import br.com.geangc.sistema_mr.agent.gateway.ModelRequest;
 import br.com.geangc.sistema_mr.agent.gateway.ModelResponse;
 import br.com.geangc.sistema_mr.agent.gateway.ToolExecutionPort;
@@ -131,6 +133,73 @@ class AgentRuntimePolicyTest {
         assertEquals("TOOL_AUTONOMY_LEVEL_NOT_ALLOWED", result.failureReason());
         verify(repository, never()).reserveToolCall(any(), any(), any(), any(), any());
         verify(toolExecutionPort, never()).execute(any(), any());
+    }
+
+    @Test
+    void continuesAfterToolCallAndRecordsEachModelOutcome() {
+        UUID runId = UUID.randomUUID();
+        AgentRunRepository repository = mock(AgentRunRepository.class);
+        ModelGateway modelGateway = mock(ModelGateway.class);
+        ToolExecutionPort toolExecutionPort = mock(ToolExecutionPort.class);
+        InMemoryRunScheduler scheduler = mock(InMemoryRunScheduler.class);
+        when(repository.claim(runId, "owner")).thenReturn(true);
+        when(repository.reserveToolCall(eq(runId), eq("owner"), eq("call-1"), eq("lookup"), any()))
+                .thenReturn(true);
+        when(modelGateway.invoke(any())).thenReturn(
+                modelResponse(new AssistantMessage.ToolCall("call-1", "function", "lookup", "{\"query\":\"teste\"}")),
+                textModelResponse("Resultado final")
+        );
+        when(toolExecutionPort.execute(any(), any())).thenReturn(
+                new ToolExecutionPort.ToolExecutionResult(
+                        List.of(new org.springframework.ai.chat.messages.UserMessage("Resultado da ferramenta")),
+                        false
+                )
+        );
+
+        AgentRuntime runtime = new AgentRuntime(
+                properties(), repository, modelGateway, toolExecutionPort, scheduler,
+                new ToolAutonomyPolicy()
+        );
+        AgentRunResult result = runtime.execute(command(runId, tool("lookup", AutonomyLevel.EXECUTE)));
+
+        assertEquals(AgentRunStatus.COMPLETED, result.status());
+        assertEquals("Resultado final", result.content());
+        verify(modelGateway, times(2)).invoke(any());
+        verify(repository, times(2)).recordInvocation(
+                eq(runId), eq("owner"), any(Integer.class), eq("route"), eq("provider"), eq("model"),
+                eq("test"), any(Boolean.class), any(ModelResponse.InvocationUsage.class), any(String.class),
+                any(), any()
+        );
+        verify(repository).recordInvocation(
+                eq(runId), eq("owner"), eq(1), eq("route"), eq("provider"), eq("model"),
+                eq("test"), eq(true), any(ModelResponse.InvocationUsage.class), eq("TOOL_CALLS"), any(), any()
+        );
+        verify(repository).recordInvocation(
+                eq(runId), eq("owner"), eq(2), eq("route"), eq("provider"), eq("model"),
+                eq("test"), eq(false), any(ModelResponse.InvocationUsage.class), eq("FINAL_RESPONSE"), any(), any()
+        );
+    }
+
+    @Test
+    void waitsForCapacityAndSchedulesRunForLaterRetry() {
+        UUID runId = UUID.randomUUID();
+        AgentRunRepository repository = mock(AgentRunRepository.class);
+        ModelGateway modelGateway = mock(ModelGateway.class);
+        ToolExecutionPort toolExecutionPort = mock(ToolExecutionPort.class);
+        InMemoryRunScheduler scheduler = mock(InMemoryRunScheduler.class);
+        when(repository.claim(runId, "owner")).thenReturn(true);
+        when(modelGateway.invoke(any())).thenThrow(new ModelCapacityException("quota temporariamente esgotada", null));
+
+        AgentRuntime runtime = new AgentRuntime(
+                properties(), repository, modelGateway, toolExecutionPort, scheduler,
+                new ToolAutonomyPolicy()
+        );
+        AgentRunResult result = runtime.execute(command(runId));
+
+        assertEquals(AgentRunStatus.WAITING_FOR_CAPACITY, result.status());
+        assertEquals("quota temporariamente esgotada", result.failureReason());
+        verify(repository).waitForCapacity(runId, "owner", "quota temporariamente esgotada");
+        verify(scheduler).enqueue(runId);
     }
 
     private static AgentRunCommand command(UUID runId, AgentTool... tools) {

@@ -97,9 +97,10 @@ As versões abaixo são as versões exatas resolvidas no `frontend/package-lock.
 - `python-runner/`: servidor HTTP Python baseado em `http.server`, com `/health`
   e `/execute`; `test_runner.py` contém os testes unitários.
 - `docker-compose.yml`: define Neo4j, backend, frontend, OCR e Runner, volumes
-  de dados e redes `application`, `runner` e `ocr`. No fluxo local, Neo4j, OCR e
-  Runner são os serviços executados via Compose; backend e frontend devem ser
-  executados localmente no host. O backend usa variáveis de ambiente como
+  de dados e redes `application`, `runner` e `ocr`. No fluxo local, todos os
+  serviços podem ser executados via Compose sob controle do agente; os modos
+  locais no host continuam disponíveis para desenvolvimento. O backend usa
+  variáveis de ambiente como
   `GEMINI_API_KEY`, `JWT_SECRET`, `PASSWD_NEO4J`, `PYTHON_RUNNER_URL`,
   `OCR_SERVICE_URL` e `FILE_STORAGE_ROOT`; segredos locais ficam em `.env`, que
   é ignorado pelo Git.
@@ -219,23 +220,42 @@ operacionais abaixo.
 
 ## Ambiente de desenvolvimento local
 
-- Considere este repositório um ambiente de desenvolvimento local.
-- Nunca execute `docker compose up` sem indicar explicitamente um serviço.
-- Não inicie uma stack do Compose que inclua `backend` ou `frontend`; esses dois
-  serviços devem rodar localmente no próprio host.
-- Os únicos serviços permitidos com `docker compose up` são `neo4j`, `ocr-service` e `python-runner`, isolados ou juntos, e somente quando forem necessários para a tarefa ou validação atual.
-- São permitidos `docker compose up neo4j`, `docker compose up python-runner`, `docker compose up ocr-service`, `docker compose up neo4j python-runner`, `docker compose up neo4j ocr-service` e `docker compose up neo4j python-runner ocr-service`.
-- Nunca inclua `backend`, `frontend` ou qualquer outro serviço não listado em um
-  comando `docker compose up` sem nova autorização explícita do usuário.
+- Considere este repositório um ambiente de desenvolvimento local controlado
+  pelo agente.
+- Nunca execute `docker compose up` sem indicar explicitamente os serviços.
+- A autorização operacional permanente do proprietário do repositório permite
+  iniciar, recriar, atualizar e parar `backend`, `frontend`, `neo4j`,
+  `ocr-service` e `python-runner` quando isso fizer parte da tarefa atual.
+- Podem ser executados serviços isolados, combinações parciais ou a stack
+  completa, conforme a validação necessária. Evite iniciar serviços que não
+  tenham relação com a tarefa.
+- A stack completa pode ser iniciada com `docker compose up backend frontend
+  neo4j ocr-service python-runner`. O modo normal deve continuar usando os
+  serviços versionados; um modo dev/debug com hot reload deve ser introduzido
+  separadamente e não deve ser presumido até estar documentado.
 - Prefira validações locais, estáticas e unitárias quando forem adequadas, mas
   também execute validações que dependam de serviços em execução quando forem
   relevantes para a tarefa.
 - Validações funcionais usando CDP são encorajadas quando agregarem valor, embora
   não sejam obrigatórias; o usuário também pode executá-las manualmente.
-- Quando forem necessários serviços persistentes, backend e frontend devem ser
-  iniciados localmente no host, e os serviços Compose permitidos podem ser
-  iniciados conforme o escopo autorizado da tarefa ou solicitação explícita do
-  usuário.
+- Quando forem necessários serviços persistentes, o agente pode iniciar a
+  stack completa via Compose ou combinar serviços Compose com processos locais,
+  escolhendo a modalidade que melhor atende à validação atual.
+
+### Operações Git no Codex
+
+- A pasta `.git` pode aparecer em `writable_roots` e ainda assim permanecer
+  sem escrita efetiva para processos Git comuns neste ambiente.
+- Se `git add`, `git commit` ou outra operação que altere metadados do Git
+  falhar com `Unable to create '.git/index.lock': Permission denied`, trate o
+  caso como restrição de permissão do ambiente, não como `index.lock` órfão.
+- A condição que funcionou neste workspace foi executar a operação Git com
+  `sandbox_permissions: require_escalated`. Repetir tentativas de ajustar ACL,
+  criar/remover `index.lock` ou apenas adicionar `.git` a `writable_roots` não
+  resolveu a execução normal.
+- Antes de qualquer remoção manual, confirme que não há processo Git ativo e
+  que o arquivo `.git/index.lock` realmente existe. Não criar esse arquivo
+  manualmente.
 
 ## GitHub Issues e Project
 

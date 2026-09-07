@@ -55,6 +55,7 @@ describe('ChatComponent', () => {
       removerArquivo: vi.fn(),
       baixarArquivo: vi.fn(),
       reprocessarArquivo: vi.fn(),
+      solicitarRevisaoPrivacidade: vi.fn(),
       carregarAssuntos: vi.fn(() => ({
         subscribe: ({ next }: { next: (subjects: never[]) => void }) => next([]),
       })),

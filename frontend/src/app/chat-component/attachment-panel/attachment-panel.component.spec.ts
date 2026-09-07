@@ -70,25 +70,19 @@ describe('AttachmentPanelComponent', () => {
     expect(element.querySelector('button[aria-label="Reprocessar failed.pdf"]')).not.toBeNull();
     expect(element.textContent).toContain('Revisão necessária');
     expect(
-      element.querySelector('button[aria-label="Revisar privacidade de review.pdf"]'),
+      element.querySelector('button[aria-label="Conversar sobre a privacidade de review.pdf"]'),
     ).not.toBeNull();
   });
 
-  it('opens a privacy review dialog for documents that need review', () => {
+  it('emits a privacy review request for documents that need review', () => {
     const review = file('review', 'NEEDS_REVIEW');
     review.errorMessage = 'OCR local insuficiente';
-    component.abrirRevisao(review);
-    fixture.detectChanges();
+    const requested = vi.fn();
+    component.privacyReviewRequested.subscribe(requested);
 
-    const element = fixture.nativeElement as HTMLElement;
-    expect(element.querySelector('[role="dialog"]')?.textContent).toContain(
-      'OCR local insuficiente',
-    );
-    expect(element.textContent).toContain('não será usado no chat');
+    component.solicitarRevisaoPrivacidade(review);
 
-    component.fecharRevisao();
-    fixture.detectChanges();
-    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    expect(requested).toHaveBeenCalledWith(review);
   });
 
   function file(id: string, status: IChatFile['status']): IChatFile {

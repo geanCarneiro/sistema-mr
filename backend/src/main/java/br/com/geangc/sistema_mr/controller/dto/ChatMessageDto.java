@@ -19,11 +19,24 @@ public record ChatMessageDto(
         String messageType,
         String timestamp,
         String content,
-        List<GroundingFileDto> groundingFiles
+        List<GroundingFileDto> groundingFiles,
+        String messageKind,
+        String privacyFileId
 ) {
 
     public ChatMessageDto {
         groundingFiles = groundingFiles == null ? List.of() : List.copyOf(groundingFiles);
+    }
+
+    public ChatMessageDto(
+            String messageId,
+            String interactionId,
+            String messageType,
+            String timestamp,
+            String content,
+            List<GroundingFileDto> groundingFiles
+    ) {
+        this(messageId, interactionId, messageType, timestamp, content, groundingFiles, "NORMAL", null);
     }
 
     public static ChatMessageDto fromMessage(Message message) {
@@ -43,7 +56,13 @@ public record ChatMessageDto(
                 Optional.ofNullable(message.getMetadata().get("rawContent"))
                         .map(Object::toString)
                         .orElseGet(message::getText),
-                List.of()
+                List.of(),
+                Optional.ofNullable(message.getMetadata().get("messageKind"))
+                        .map(Object::toString)
+                        .orElse(null),
+                Optional.ofNullable(message.getMetadata().get("privacyFileId"))
+                        .map(Object::toString)
+                        .orElse(null)
         );
     }
 
@@ -54,7 +73,9 @@ public record ChatMessageDto(
                 "USER",
                 interaction.createdAt().toString(),
                 interaction.prompt(),
-                List.of()
+                List.of(),
+                "NORMAL",
+                null
         );
     }
 
@@ -65,7 +86,9 @@ public record ChatMessageDto(
                 "ASSISTANT",
                 interaction.completedAt().toString(),
                 interaction.response(),
-                interaction.sources().stream().map(GroundingFileDto::from).toList()
+                interaction.sources().stream().map(GroundingFileDto::from).toList(),
+                "NORMAL",
+                null
         );
     }
 }

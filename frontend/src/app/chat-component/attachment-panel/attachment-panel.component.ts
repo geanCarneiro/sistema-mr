@@ -43,7 +43,7 @@ export class AttachmentPanelComponent {
   fileDownloaded = output<IChatFile>();
   fileRemoved = output<IChatFile>();
   fileRetried = output<IChatFile>();
-  reviewFile = signal<IChatFile | null>(null);
+  privacyReviewRequested = output<IChatFile>();
 
   abrirSeletorDeArquivos(): void {
     if (!this.uploading()) this.fileInput?.nativeElement.click();
@@ -90,11 +90,7 @@ export class AttachmentPanelComponent {
     if (file.status === 'FAILED' || file.status === 'NEEDS_REVIEW') this.fileRetried.emit(file);
   }
 
-  abrirRevisao(file: IChatFile): void {
-    this.reviewFile.set(file);
-  }
-
-  fecharRevisao(): void {
-    this.reviewFile.set(null);
+  solicitarRevisaoPrivacidade(file: IChatFile): void {
+    this.privacyReviewRequested.emit(file);
   }
 }

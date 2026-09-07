@@ -72,6 +72,10 @@ public class DocumentService {
         return repository.listOwned(conversationId, ownerSubject);
     }
 
+    public ChatFile findOwned(UUID id, String conversationId, String ownerSubject) {
+        return owned(id, conversationId, ownerSubject);
+    }
+
     public Download download(UUID id, String conversationId, String ownerSubject) {
         ChatFile file = owned(id, conversationId, ownerSubject);
         try {

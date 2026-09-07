@@ -35,6 +35,32 @@ public class PrivacyConsentInterpreter {
         }
     }
 
+    /**
+     * Interpreta somente a resposta natural à pergunta de revisão de arquivo.
+     * O prompt enviado ao modelo local não contém o conteúdo do arquivo.
+     */
+    public Review interpretReview(String prompt) {
+        if (localModelProvider == null) {
+            return new Review("CLARIFY", "A interpretação local está indisponível", 0.0);
+        }
+        String classificationPrompt = """
+                Classifique a resposta do usuário para a pergunta: "Você prefere que eu tente processar novamente o arquivo ou que eu o mantenha bloqueado?"
+                Resposta do usuário: %s
+                Retorne a intenção RETRY_ANALYSIS se ele autorizou uma nova tentativa de processamento, KEEP_BLOCKED se pediu para manter bloqueado, ou CLARIFY se ficou ambíguo.
+                Não invente uma autorização e não considere o conteúdo de nenhum arquivo.
+                """.formatted(prompt == null ? "" : prompt);
+        try {
+            LocalModelProvider.LocalDecision decision = localModelProvider.decide(classificationPrompt);
+            String intent = switch (decision.intent()) {
+                case "RETRY_ANALYSIS", "KEEP_BLOCKED", "CLARIFY" -> decision.intent();
+                default -> "CLARIFY";
+            };
+            return new Review(intent, decision.explanation(), decision.confidence());
+        } catch (RuntimeException exception) {
+            return new Review("CLARIFY", "A decisão local está indisponível", 0.0);
+        }
+    }
+
     private static boolean containsAny(String value, String... terms) {
         for (String term : terms) {
             if (value.contains(term)) {
@@ -45,4 +71,6 @@ public class PrivacyConsentInterpreter {
     }
 
     public record Consent(String intent, String explanation, double confidence) {}
+
+    public record Review(String intent, String explanation, double confidence) {}
 }

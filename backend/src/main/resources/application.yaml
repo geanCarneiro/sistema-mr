@@ -94,6 +94,9 @@ app:
             structured-output: true
             thinking: false
           quota: {}
+      scheduler:
+        storage-path: ${AGENT_RUN_SCHEDULER_PATH:./data/agent-runs}
+        retry-delay-millis: ${AGENT_RUN_SCHEDULER_RETRY_DELAY_MILLIS:1000}
     document-vision:
       model: gemini-3.1-flash-lite
       temperature: 0.0
@@ -103,7 +106,7 @@ app:
       service-url: ${LOCAL_AI_SERVICE_URL:http://127.0.0.1:8083}
       model: ${LOCAL_AI_CHAT_MODEL:gemma-3-4b-it-q4}
       connect-timeout-seconds: 2
-      read-timeout-seconds: 90
+      read-timeout-seconds: ${LOCAL_AI_READ_TIMEOUT_SECONDS:180}
       decision-max-tokens: 256
       vision-max-tokens: 2048
   documents:

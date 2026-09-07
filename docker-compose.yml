@@ -46,11 +46,14 @@ services:
       OCR_SERVICE_URL: http://ocr-service:8082
       DOCUMENT_EMBEDDING_SERVICE_URL: http://local-ai-service:8083
       LOCAL_AI_SERVICE_URL: http://local-ai-service:8083
+      LOCAL_AI_READ_TIMEOUT_SECONDS: ${LOCAL_AI_READ_TIMEOUT_SECONDS:-180}
       FILE_STORAGE_ROOT: /app/data/files
+      AGENT_RUN_SCHEDULER_PATH: /app/data/agent-runs
     volumes:
       # Mantém o armazenamento documental compartilhado com a execução local
       # do backend durante o desenvolvimento.
       - ./backend/data/files:/app/data/files
+      - ./backend/data/agent-runs:/app/data/agent-runs
     depends_on:
       neo4j:
         condition: service_healthy
@@ -178,11 +181,11 @@ services:
       EMBEDDING_MODEL: intfloat/multilingual-e5-small
       EMBEDDING_MODEL_CACHE: /models
       EMBEDDING_DEVICE: cpu
-      LOCAL_CHAT_MODEL_PATH: /models/gemma-3-4b-it-q4_0.gguf
+      LOCAL_CHAT_MODEL_PATH: /models/gemma-3-4b-it-Q4_K_M.gguf
       LOCAL_CHAT_MODEL_NAME: gemma-3-4b-it-q4
       LOCAL_CHAT_CONTEXT_SIZE: 8192
       LOCAL_CHAT_THREADS: 4
-      LOCAL_CHAT_FORMAT: gemma-3
+      LOCAL_CHAT_FORMAT: gemma
       LOCAL_VISION_PROJECTOR_PATH: /models/mmproj-model-f16.gguf
       OMP_NUM_THREADS: 4
       MKL_NUM_THREADS: 4

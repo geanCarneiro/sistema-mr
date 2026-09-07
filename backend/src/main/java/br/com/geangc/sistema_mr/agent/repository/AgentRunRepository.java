@@ -170,6 +170,40 @@ public class AgentRunRepository {
         }
     }
 
+    public Optional<AgentRun> findById(UUID runId) {
+        String query = """
+                MATCH (run:AgentRun {id: $runId})
+                RETURN run
+                """;
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(query, Map.of(
+                    "runId", runId.toString()
+            )).stream().findFirst().map(this::mapRun));
+        }
+    }
+
+    /**
+     * Um processo encerrado pode deixar uma execução em RUNNING. Ela não pode
+     * continuar sendo considerada dona do assunto para sempre; o worker local
+     * a coloca novamente na fila de retomada.
+     */
+    public void recoverInterruptedRuns() {
+        String query = """
+                MATCH (run:AgentRun)
+                WHERE run.status = 'RUNNING'
+                SET run.status = 'WAITING_FOR_CAPACITY',
+                    run.failureReason = 'PROCESS_RESTARTED',
+                    run.version = run.version + 1
+                RETURN count(run) AS recovered
+                """;
+        try (var session = driver.session()) {
+            session.executeWrite(transaction -> {
+                transaction.run(query).consume();
+                return null;
+            });
+        }
+    }
+
     public void recordInvocation(
             UUID runId,
             String ownerSubject,

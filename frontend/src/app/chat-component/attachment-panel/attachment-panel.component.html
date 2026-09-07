@@ -90,9 +90,9 @@
               pButton
               type="button"
               severity="danger"
-              aria-label="Revisar privacidade de {{ file.name }}"
-              title="Revisar privacidade"
-              (click)="abrirRevisao(file)"
+              aria-label="Conversar sobre a privacidade de {{ file.name }}"
+              title="Conversar sobre a privacidade"
+              (click)="solicitarRevisaoPrivacidade(file)"
             >
               <svg data-p-icon="exclamation-triangle" pButtonIcon aria-hidden="true"></svg>
             </button>
@@ -136,39 +136,4 @@
       </div>
     }
   </div>
-
-  @if (reviewFile(); as file) {
-    <div class="review-backdrop" role="presentation" (click)="fecharRevisao()">
-      <section
-        class="review-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="privacy-review-title"
-        (click)="$event.stopPropagation()"
-      >
-        <h4 id="privacy-review-title">Revisão de privacidade</h4>
-        <p class="review-file-name">{{ file.name }}</p>
-        <p>
-          Este documento está bloqueado porque a análise local não foi concluída com segurança. Ele
-          não será usado no chat enquanto estiver nesta situação.
-        </p>
-        @if (file.errorMessage) {
-          <p class="review-reason">{{ file.errorMessage }}</p>
-        }
-        <div class="review-actions">
-          <button pButton type="button" severity="secondary" (click)="fecharRevisao()">
-            Fechar
-          </button>
-          <button
-            pButton
-            type="button"
-            severity="warn"
-            (click)="reprocessarArquivo(file); fecharRevisao()"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </section>
-    </div>
-  }
 </aside>

@@ -12,6 +12,7 @@ export interface IChatResponse {
   timestamp: string;
   messageType: 'ASSISTANT';
   groundingFiles?: IGroundingFile[];
+  privacyReviewResolved?: boolean;
 }
 
 interface IChatStartResponse {
@@ -50,6 +51,7 @@ export class AiChatService {
   public files = signal<IChatFile[]>([]);
   public uploading = signal<boolean>(false);
   public uploadError = signal<string | null>(null);
+  public pendingPrivacyFileId = signal<string | null>(null);
   private readonly finishedRuns = new Set<string>();
 
   constructor(private readonly http: HttpClient) {}
@@ -82,8 +84,12 @@ export class AiChatService {
 
     // Payload enviado ao back-end
     const payload = { prompt, attachmentIds, includeRelatedFiles, subjectId };
+    const requestPayload = {
+      ...payload,
+      privacyReviewFileId: this.pendingPrivacyFileId(),
+    };
 
-    this.http.post<IChatStartResponse>(this.urlBase, payload).subscribe({
+    this.http.post<IChatStartResponse>(this.urlBase, requestPayload).subscribe({
       next: (res) => {
         const acknowledgement: IChatMessage = {
           messageType: 'ASSISTANT',
@@ -137,6 +143,10 @@ export class AiChatService {
   }
 
   private appendResult(result: IChatResponse, userMsg: IChatMessage): void {
+    if (result.privacyReviewResolved) {
+      this.pendingPrivacyFileId.set(null);
+      this.carregarArquivos();
+    }
     this.messages.update((list) =>
       list.map((message) =>
         message === userMsg
@@ -187,6 +197,20 @@ export class AiChatService {
         this.messages.set(data);
       },
       error: (err) => console.error('Error ao carregar historico', err),
+    });
+  }
+
+  public solicitarRevisaoPrivacidade(file: IChatFile): void {
+    this.http.post<IChatMessage>(`${this.urlBase}/privacy-review`, { fileId: file.id }).subscribe({
+      next: (message) => {
+        this.pendingPrivacyFileId.set(file.id);
+        this.messages.update((list) => [...list, message]);
+      },
+      error: (err) => {
+        this.appendFailure(
+          err?.error?.message ?? 'Não foi possível iniciar a revisão de privacidade.',
+        );
+      },
     });
   }
 

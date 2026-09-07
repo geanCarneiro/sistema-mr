@@ -64,6 +64,11 @@ def create_chat_model() -> Any:
             f"Modelo local não encontrado em {CHAT_MODEL_PATH}. "
             "Monte o GGUF da Gemma 3 4B IT no volume local_ai_models."
         )
+    if VISION_PROJECTOR_PATH and not os.path.isfile(VISION_PROJECTOR_PATH):
+        raise LocalModelUnavailable(
+            f"Projetor de visão não encontrado em {VISION_PROJECTOR_PATH}. "
+            "Monte o mmproj GGUF compatível no volume local_ai_models."
+        )
 
     from llama_cpp import Llama
 
@@ -79,11 +84,37 @@ def create_chat_model() -> Any:
         "n_ctx": CHAT_CONTEXT_SIZE,
         "n_threads": CHAT_THREADS,
         "n_gpu_layers": 0,
-        "chat_format": CHAT_FORMAT,
         "verbose": False,
     }
     if VISION_PROJECTOR_PATH:
-        options["clip_model_path"] = VISION_PROJECTOR_PATH
+        from llama_cpp.llama_chat_format import Llava15ChatHandler
+
+        class Gemma3ChatHandler(Llava15ChatHandler):
+            DEFAULT_SYSTEM_MESSAGE = None
+            CHAT_FORMAT = (
+                "{% if messages[0]['role'] == 'system' %}"
+                "{% if messages[0]['content'] is string %}"
+                "<start_of_turn>user\n{{ messages[0]['content'] }}<end_of_turn>\n"
+                "<start_of_turn>model\nUnderstood.<end_of_turn>\n"
+                "{% endif %}{% endif %}"
+                "{% for message in messages %}{% if message.role != 'system' %}"
+                "<start_of_turn>{{ message.role }}\n"
+                "{% if message.content is string %}{{ message.content }}"
+                "{% else %}{% for content in message.content %}"
+                "{% if content.type == 'text' and content.text %}{{ content.text }}{% endif %}"
+                "{% if content.type == 'image_url' %}{{ content.image_url.url }}{% endif %}"
+                "{% endfor %}{% endif %}"
+                "<end_of_turn>\n"
+                "{% endif %}{% endfor %}"
+                "{% if add_generation_prompt %}<start_of_turn>model\n{% endif %}"
+            )
+
+        options["chat_handler"] = Gemma3ChatHandler(
+            clip_model_path=VISION_PROJECTOR_PATH,
+            verbose=False,
+        )
+    else:
+        options["chat_format"] = CHAT_FORMAT
     return Llama(**options)
 
 
@@ -193,18 +224,35 @@ class EmbeddingRequestHandler(BaseHTTPRequestHandler):
     server_version = "SistemaMRLocalAiService/1.0"
 
     def do_GET(self) -> None:
-        if self.path != "/health":
+        if self.path not in {"/health", "/health/chat", "/health/vision"}:
             self._write_json(HTTPStatus.NOT_FOUND, {"message": "Endpoint não encontrado"})
             return
-        self._write_json(HTTPStatus.OK, {
+        chat_model_present = os.path.isfile(CHAT_MODEL_PATH)
+        vision_projector_present = bool(VISION_PROJECTOR_PATH) and os.path.isfile(VISION_PROJECTOR_PATH)
+        payload = {
             "status": "UP",
             "ready": MODEL is not None,
             "model": MODEL_NAME,
             "device": DEVICE,
             "chatModel": CHAT_MODEL_NAME,
-            "chatReady": CHAT_MODEL is not None,
-            "visionReady": CHAT_MODEL is not None and bool(VISION_PROJECTOR_PATH),
-        })
+            "chatModelPath": CHAT_MODEL_PATH,
+            "chatModelPresent": chat_model_present,
+            "chatReady": CHAT_MODEL is not None and chat_model_present,
+            "visionProjectorPath": VISION_PROJECTOR_PATH or None,
+            "visionProjectorPresent": vision_projector_present,
+            "visionReady": CHAT_MODEL is not None and chat_model_present and vision_projector_present,
+        }
+        if self.path == "/health/chat":
+            payload["status"] = "READY" if payload["chatModelPresent"] else "MISSING_MODEL"
+            self._write_json(HTTPStatus.OK if payload["chatModelPresent"] else HTTPStatus.SERVICE_UNAVAILABLE, payload)
+            return
+        if self.path == "/health/vision":
+            payload["status"] = "READY" if payload["visionProjectorPresent"] else "MISSING_PROJECTOR"
+            self._write_json(HTTPStatus.OK if payload["visionProjectorPresent"] else HTTPStatus.SERVICE_UNAVAILABLE, payload)
+            return
+        if not payload["ready"]:
+            payload["status"] = "DEGRADED"
+        self._write_json(HTTPStatus.OK, payload)
 
     def do_POST(self) -> None:
         if self.path not in {"/embed", "/chat", "/decision", "/vision"}:
@@ -240,7 +288,7 @@ class EmbeddingRequestHandler(BaseHTTPRequestHandler):
                         "content": (
                             "Interprete a intenção do usuário para uma decisão de privacidade. "
                             "Retorne somente JSON com intent, confidence e explanation. "
-                            "Os intents permitidos são ALLOW_MINIMIZED, DENY, ALLOW_FULL e CLARIFY."
+                            "Os intents permitidos são ALLOW_MINIMIZED, DENY, ALLOW_FULL, RETRY_ANALYSIS, KEEP_BLOCKED e CLARIFY."
                         ),
                     },
                     {"role": "user", "content": prompt},

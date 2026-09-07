@@ -52,10 +52,11 @@ public class AiController {
             @Size(max = 10, message = "Selecione no máximo 10 anexos")
             List<UUID> attachmentIds,
             Boolean includeRelatedFiles,
-            UUID subjectId
+            UUID subjectId,
+            UUID privacyReviewFileId
     ) {
         public ChatRequestDTO(String prompt, List<UUID> attachmentIds, Boolean includeRelatedFiles) {
-            this(prompt, attachmentIds, includeRelatedFiles, null);
+            this(prompt, attachmentIds, includeRelatedFiles, null, null);
         }
 
         public boolean shouldIncludeRelatedFiles() {
@@ -70,8 +71,11 @@ public class AiController {
             String content,
             Instant timestamp,
             String messageType,
-            List<GroundingFileDto> groundingFiles
+            List<GroundingFileDto> groundingFiles,
+            boolean privacyReviewResolved
     ) {}
+
+    public record PrivacyReviewRequest(UUID fileId) {}
 
     @PostMapping
     public ResponseEntity<ChatStartDTO> chat(
@@ -83,6 +87,7 @@ public class AiController {
                 request.attachmentIds(),
                 request.shouldIncludeRelatedFiles(),
                 request.subjectId(),
+                request.privacyReviewFileId(),
                 jwt.getSubject()
         );
         return ResponseEntity.accepted().body(new ChatStartDTO(
@@ -106,6 +111,14 @@ public class AiController {
     @GetMapping("/history")
     public List<ChatMessageDto> getHistory(@AuthenticationPrincipal Jwt jwt) {
         return chatHistoryService.find(jwt.getSubject());
+    }
+
+    @PostMapping("/privacy-review")
+    public ChatMessageDto requestPrivacyReview(
+            @RequestBody PrivacyReviewRequest request,
+            @AuthenticationPrincipal Jwt jwt
+    ) {
+        return chatApplicationService.requestPrivacyReview(request.fileId(), jwt.getSubject());
     }
 
     @GetMapping("/subjects")
@@ -136,7 +149,8 @@ public class AiController {
             ChatApplicationService.ChatResult result = snapshot.result();
             ChatResponseDTO response = result == null ? null : new ChatResponseDTO(
                     result.interactionId(), result.userMessageId(), result.assistantMessageId(),
-                    result.content(), result.timestamp(), result.messageType(), result.groundingFiles());
+                    result.content(), result.timestamp(), result.messageType(), result.groundingFiles(),
+                    result.privacyReviewResolved());
             return new RunEventDTO(
                     snapshot.runId(), snapshot.revision(), snapshot.status(), snapshot.phase(),
                     snapshot.message(), response, snapshot.failureReason(), snapshot.terminal(),

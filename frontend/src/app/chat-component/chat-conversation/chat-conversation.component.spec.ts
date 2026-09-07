@@ -77,4 +77,26 @@ describe('ChatConversationComponent', () => {
       element.querySelector('[aria-label="Fonte apagado.pdf. Arquivo não está mais disponível."]'),
     ).not.toBeNull();
   });
+
+  it('renders privacy review as part of the conversation', () => {
+    fixture.componentRef.setInput('messages', [
+      {
+        messageId: 'privacy-review',
+        messageType: 'ASSISTANT',
+        messageKind: 'PRIVACY_REVIEW',
+        privacyFileId: 'review',
+        content:
+          'Encontrei um problema ao analisar o arquivo captura.png. A análise local não foi concluída. Responda com suas próprias palavras.',
+        timestamp: '2026-08-30T00:00:00Z',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
+    expect(element.textContent).toContain('captura.png');
+    expect(element.textContent).toContain('A análise local não foi concluída');
+    expect(element.textContent).toContain('Responda com suas próprias palavras');
+    expect(element.textContent).not.toContain('Manter bloqueado');
+  });
 });

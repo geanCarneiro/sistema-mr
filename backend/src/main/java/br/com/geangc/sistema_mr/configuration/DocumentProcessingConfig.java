@@ -14,6 +14,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
         DocumentPrivacyProperties.class,
         DocumentVisionProperties.class,
         AgentRuntimeProperties.class,
+        AgentRuntimeSchedulerProperties.class,
         LocalAiProperties.class
 })
 public class DocumentProcessingConfig {
@@ -36,6 +37,17 @@ public class DocumentProcessingConfig {
         executor.setMaxPoolSize(2);
         executor.setQueueCapacity(20);
         executor.setThreadNamePrefix("agent-processing-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean("agentResumeTaskExecutor")
+    public Executor agentResumeTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(1);
+        executor.setThreadNamePrefix("agent-resume-");
         executor.initialize();
         return executor;
     }

@@ -28,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -107,8 +108,7 @@ public class AgentRuntime {
         ContextSnapshot snapshot = contextSnapshotProvider.snapshot(
                 command.subjectId(), command.conversationId(), command.ownerSubject(), latestUserPrompt(command.messages()));
         List<Message> conversation = new ArrayList<>(command.messages());
-        conversation.add(Math.min(1, conversation.size()),
-                new org.springframework.ai.chat.messages.SystemMessage(snapshot.asModelText()));
+        mergeContextSnapshot(conversation, snapshot);
         Instant deadline = createdAt.plus(Duration.ofSeconds(properties.limits().maxDurationSeconds()));
         int modelInvocations = 0;
         int toolCalls = 0;
@@ -326,6 +326,15 @@ public class AgentRuntime {
             }
         }
         return "";
+    }
+
+    private static void mergeContextSnapshot(List<Message> conversation, ContextSnapshot snapshot) {
+        String contextText = snapshot.asModelText();
+        if (!conversation.isEmpty() && conversation.getFirst() instanceof SystemMessage systemMessage) {
+            conversation.set(0, new SystemMessage(systemMessage.getText() + "\n\n" + contextText));
+        } else {
+            conversation.addFirst(new SystemMessage(contextText));
+        }
     }
 
     private AgentRunResult fail(AgentRun run, String reason) {

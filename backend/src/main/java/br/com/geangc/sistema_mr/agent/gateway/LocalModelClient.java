@@ -96,13 +96,15 @@ public class LocalModelClient implements LocalModelProvider {
     private Map<String, Object> post(String path, Map<String, Object> payload) {
         Map<?, ?> response;
         try {
+            byte[] requestBody = objectMapper.writeValueAsBytes(payload);
             response = client.post()
                     .uri(path)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(payload)
+                    .contentLength(requestBody.length)
+                    .body(requestBody)
                     .retrieve()
                     .body(Map.class);
-        } catch (RestClientException exception) {
+        } catch (JacksonException | RestClientException exception) {
             throw new ModelCapacityException("O serviço local não está disponível", exception);
         }
         if (response == null) {

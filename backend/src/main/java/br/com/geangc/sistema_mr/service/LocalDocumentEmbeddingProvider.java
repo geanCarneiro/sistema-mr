@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 @Component
 public class LocalDocumentEmbeddingProvider implements DocumentEmbeddingProvider {
@@ -12,9 +14,12 @@ public class LocalDocumentEmbeddingProvider implements DocumentEmbeddingProvider
     private final RestClient client;
     private final DocumentProperties properties;
 
-    public LocalDocumentEmbeddingProvider(DocumentProperties properties) {
+    private final ObjectMapper objectMapper;
+
+    public LocalDocumentEmbeddingProvider(DocumentProperties properties, ObjectMapper objectMapper) {
         this.client = RestClient.builder().baseUrl(properties.embeddingServiceUrl()).build();
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -22,12 +27,21 @@ public class LocalDocumentEmbeddingProvider implements DocumentEmbeddingProvider
         if (texts == null || texts.isEmpty()) {
             return List.of();
         }
-        EmbeddingResponse response = client.post()
-                .uri("/embed")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new EmbeddingRequest(texts, properties.embeddingModel()))
-                .retrieve()
-                .body(EmbeddingResponse.class);
+        EmbeddingResponse response;
+        try {
+            byte[] requestBody = objectMapper.writeValueAsBytes(
+                    new EmbeddingRequest(texts, properties.embeddingModel())
+            );
+            response = client.post()
+                    .uri("/embed")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentLength(requestBody.length)
+                    .body(requestBody)
+                    .retrieve()
+                    .body(EmbeddingResponse.class);
+        } catch (JacksonException exception) {
+            throw new IllegalStateException("Não foi possível serializar a requisição de embeddings", exception);
+        }
         if (response == null || response.embeddings() == null || response.embeddings().size() != texts.size()) {
             throw new IllegalStateException("O serviço local de embeddings retornou uma quantidade inesperada de vetores");
         }

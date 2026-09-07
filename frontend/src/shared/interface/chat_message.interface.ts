@@ -15,4 +15,6 @@ export interface IChatMessage {
   notValid?: boolean;
   attachments?: string[];
   groundingFiles?: IGroundingFile[];
+  messageKind?: 'NORMAL' | 'PRIVACY_REVIEW' | string;
+  privacyFileId?: string;
 }

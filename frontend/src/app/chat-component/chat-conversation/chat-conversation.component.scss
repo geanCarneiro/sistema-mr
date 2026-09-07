@@ -139,6 +139,23 @@ button {
   }
 }
 
+.privacy-review-message {
+  max-width: min(90%, 42rem);
+  border-color: #a83b3b;
+
+  p {
+    margin: 0 0 0.7rem;
+  }
+
+  .privacy-review-reason {
+    padding: 0.65rem;
+    border-radius: 4px;
+    background: #321f1f;
+    color: #ffb3b3;
+    font-size: 0.85rem;
+  }
+}
+
 .chat-processing {
   align-self: flex-start;
   display: flex;
@@ -272,19 +289,27 @@ button {
     padding: 10px 12px 0;
   }
 
-  .chat-header-main {
-    align-items: flex-start;
-
-    h2 {
-      font-size: 0.95rem;
-    }
+  .chat-header .chat-header-main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 8px;
   }
 
-  .header-actions {
-    gap: 4px;
+  .chat-header .chat-header-main h2 {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: 0.95rem;
+  }
 
-    .btn-secondary {
-      padding-inline: 7px;
-    }
+  .chat-header .header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+
+    gap: 4px;
+  }
+
+  .chat-header .header-actions .btn-secondary {
+    padding-inline: 7px;
   }
 }

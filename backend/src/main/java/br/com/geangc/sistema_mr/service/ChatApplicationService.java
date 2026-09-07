@@ -1,12 +1,18 @@
 package br.com.geangc.sistema_mr.service;
 
 import br.com.geangc.sistema_mr.agent.model.AgentRunCommand;
+import br.com.geangc.sistema_mr.agent.model.AgentRun;
 import br.com.geangc.sistema_mr.agent.model.AgentRunResult;
 import br.com.geangc.sistema_mr.agent.model.AgentRunTrigger;
+import br.com.geangc.sistema_mr.agent.model.QueuedChatRequest;
 import br.com.geangc.sistema_mr.agent.service.AgentRuntime;
 import br.com.geangc.sistema_mr.agent.service.AgentRunUnavailableException;
+import br.com.geangc.sistema_mr.agent.service.InMemoryRunScheduler;
 import br.com.geangc.sistema_mr.agent.tool.AgentToolRegistry;
 import br.com.geangc.sistema_mr.controller.dto.GroundingFileDto;
+import br.com.geangc.sistema_mr.controller.dto.ChatMessageDto;
+import br.com.geangc.sistema_mr.model.ChatFile;
+import br.com.geangc.sistema_mr.model.DocumentStatus;
 import br.com.geangc.sistema_mr.privacy.PrivacyConsentInterpreter;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -37,6 +43,8 @@ public class ChatApplicationService {
     private final Executor agentTaskExecutor;
     private final ChatRunTracker chatRunTracker;
     private final PrivacyConsentInterpreter privacyConsentInterpreter;
+    private final InMemoryRunScheduler scheduler;
+    private final DocumentService documentService;
 
     public ChatApplicationService(
             ConversationScopeService conversationScopeService,
@@ -49,7 +57,7 @@ public class ChatApplicationService {
     ) {
         this(conversationScopeService, groundingContextService, interactionService, agentRuntime,
                 chatMemory, toolRegistry, systemInstruction, Runnable::run, new ChatRunTracker(),
-                new PrivacyConsentInterpreter(null));
+                new PrivacyConsentInterpreter(null), null, null);
     }
 
     @Autowired
@@ -63,7 +71,9 @@ public class ChatApplicationService {
             @Qualifier("chatSystemInstruction") String systemInstruction,
             @Qualifier("agentTaskExecutor") Executor agentTaskExecutor,
             ChatRunTracker chatRunTracker,
-            PrivacyConsentInterpreter privacyConsentInterpreter
+            PrivacyConsentInterpreter privacyConsentInterpreter,
+            InMemoryRunScheduler scheduler,
+            DocumentService documentService
     ) {
         this.conversationScopeService = conversationScopeService;
         this.groundingContextService = groundingContextService;
@@ -75,6 +85,52 @@ public class ChatApplicationService {
         this.agentTaskExecutor = agentTaskExecutor;
         this.chatRunTracker = chatRunTracker;
         this.privacyConsentInterpreter = privacyConsentInterpreter;
+        this.scheduler = scheduler;
+        this.documentService = documentService;
+    }
+
+    public ChatStart start(
+            String prompt,
+            List<UUID> attachmentIds,
+            boolean includeRelatedFiles,
+            UUID subjectId,
+            UUID privacyReviewFileId,
+            String ownerSubject
+    ) {
+        UUID runId = UUID.randomUUID();
+        String acknowledgement = acknowledgement(prompt, attachmentIds);
+        chatRunTracker.start(runId, ownerSubject, acknowledgement);
+        if (scheduler != null) {
+            scheduler.register(new QueuedChatRequest(
+                    runId, prompt, attachmentIds, includeRelatedFiles, subjectId, privacyReviewFileId));
+        }
+        agentTaskExecutor.execute(() -> {
+            try {
+                chatRunTracker.update(runId, ownerSubject, "PREPARING_CONTEXT", preparingMessage(prompt, attachmentIds));
+                ChatResult result = executeChat(
+                        runId, prompt, attachmentIds, includeRelatedFiles, subjectId, privacyReviewFileId, ownerSubject);
+                chatRunTracker.complete(
+                        runId,
+                        ownerSubject,
+                        result,
+                        result.status() == br.com.geangc.sistema_mr.agent.model.AgentRunStatus.WAITING_FOR_USER
+                                ? "WAITING_FOR_USER" : "COMPLETED",
+                        result.content()
+                );
+                if (scheduler != null) {
+                    scheduler.complete(runId);
+                }
+            } catch (AgentRunUnavailableException exception) {
+                chatRunTracker.update(
+                        runId, ownerSubject, "WAITING_FOR_CAPACITY", "WAITING_FOR_CAPACITY", exception.getMessage());
+            } catch (RuntimeException exception) {
+                chatRunTracker.fail(runId, ownerSubject, safeMessage(exception));
+                if (scheduler != null) {
+                    scheduler.complete(runId);
+                }
+            }
+        });
+        return new ChatStart(runId, acknowledgement, Instant.now());
     }
 
     public ChatStart start(
@@ -84,30 +140,30 @@ public class ChatApplicationService {
             UUID subjectId,
             String ownerSubject
     ) {
-        UUID runId = UUID.randomUUID();
-        String acknowledgement = acknowledgement(prompt, attachmentIds);
-        chatRunTracker.start(runId, ownerSubject, acknowledgement);
-        agentTaskExecutor.execute(() -> {
-            try {
-                chatRunTracker.update(runId, ownerSubject, "PREPARING_CONTEXT", preparingMessage(prompt, attachmentIds));
-                ChatResult result = executeChat(
-                        runId, prompt, attachmentIds, includeRelatedFiles, subjectId, ownerSubject);
-                chatRunTracker.complete(
-                        runId,
-                        ownerSubject,
-                        result,
-                        result.status() == br.com.geangc.sistema_mr.agent.model.AgentRunStatus.WAITING_FOR_USER
-                                ? "WAITING_FOR_USER" : "COMPLETED",
-                        result.content()
-                );
-            } catch (AgentRunUnavailableException exception) {
-                chatRunTracker.update(
-                        runId, ownerSubject, "WAITING_FOR_CAPACITY", "WAITING_FOR_CAPACITY", exception.getMessage());
-            } catch (RuntimeException exception) {
-                chatRunTracker.fail(runId, ownerSubject, safeMessage(exception));
-            }
-        });
-        return new ChatStart(runId, acknowledgement, Instant.now());
+        return start(prompt, attachmentIds, includeRelatedFiles, subjectId, null, ownerSubject);
+    }
+
+    /** Retoma uma solicitação de chat persistida pelo worker após um restart. */
+    public void resume(AgentRun run, QueuedChatRequest request) {
+        chatRunTracker.start(run.id(), run.ownerSubject(), "Retomando a execução após reinicialização.");
+        try {
+            ChatResult result = executeChat(
+                    run.id(), request.prompt(), request.attachmentIds(), request.includeRelatedFiles(),
+                    run.subjectId(), request.privacyReviewFileId(), run.ownerSubject());
+            chatRunTracker.complete(
+                    run.id(), run.ownerSubject(), result,
+                    result.status() == br.com.geangc.sistema_mr.agent.model.AgentRunStatus.WAITING_FOR_USER
+                            ? "WAITING_FOR_USER" : "COMPLETED",
+                    result.content());
+        } catch (AgentRunUnavailableException exception) {
+            chatRunTracker.update(
+                    run.id(), run.ownerSubject(), "WAITING_FOR_CAPACITY", "WAITING_FOR_CAPACITY",
+                    exception.getMessage());
+            throw exception;
+        } catch (RuntimeException exception) {
+            chatRunTracker.fail(run.id(), run.ownerSubject(), safeMessage(exception));
+            throw exception;
+        }
     }
 
     public ChatResult chat(
@@ -117,7 +173,7 @@ public class ChatApplicationService {
             UUID subjectId,
             String ownerSubject
     ) {
-        return executeChat(UUID.randomUUID(), prompt, attachmentIds, includeRelatedFiles, subjectId, ownerSubject);
+        return executeChat(UUID.randomUUID(), prompt, attachmentIds, includeRelatedFiles, subjectId, null, ownerSubject);
     }
 
     private ChatResult executeChat(
@@ -126,6 +182,7 @@ public class ChatApplicationService {
             List<UUID> attachmentIds,
             boolean includeRelatedFiles,
             UUID subjectId,
+            UUID privacyReviewFileId,
             String ownerSubject
     ) {
         Instant createdAt = Instant.now();
@@ -133,6 +190,12 @@ public class ChatApplicationService {
         UUID userMessageId = UUID.randomUUID();
         UUID assistantMessageId = UUID.randomUUID();
         ConversationScopeService.ConversationScope scope = conversationScopeService.resolve(ownerSubject, subjectId);
+
+        if (privacyReviewFileId != null) {
+            return executePrivacyReview(
+                    runId, prompt, privacyReviewFileId, scope, ownerSubject, createdAt,
+                    interactionId, userMessageId, assistantMessageId);
+        }
 
         GroundingContextService.PreparedPrompt prepared = groundingContextService.prepare(
                 scope.conversationId(),
@@ -145,6 +208,7 @@ public class ChatApplicationService {
         List<Message> messages = new ArrayList<>();
         messages.add(new SystemMessage(systemInstruction));
         List<Message> previousMessages = chatMemory.get(scope.conversationId()).stream()
+                .filter(message -> !isPrivacyReviewMessage(message))
                 .map(ChatMemoryMessageFormatter::messageForModel)
                 .toList();
         messages.addAll(previousMessages);
@@ -156,17 +220,6 @@ public class ChatApplicationService {
         ));
 
         String privacyMode = prepared.privacyDecision().mode().name();
-        if (awaitingPrivacyConsent(previousMessages)) {
-            PrivacyConsentInterpreter.Consent consent = privacyConsentInterpreter.interpret(prompt);
-            privacyMode = switch (consent.intent()) {
-                case "ALLOW_FULL" -> prepared.privacyDecision().highestSensitivity()
-                        == br.com.geangc.sistema_mr.model.DocumentSensitivity.NORMAL
-                        ? "CLOUD_FULL" : "CLOUD_MINIMIZED";
-                case "ALLOW_MINIMIZED" -> "CLOUD_MINIMIZED";
-                default -> "LOCAL_ONLY";
-            };
-        }
-
         AgentRunResult result = agentRuntime.execute(new AgentRunCommand(
                 runId,
                 scope.subjectId(),
@@ -178,7 +231,7 @@ public class ChatApplicationService {
                 toolRegistry.all(),
                 new br.com.geangc.sistema_mr.agent.model.DataConstraints(
                         privacyMode,
-                        "responder à solicitação do usuário"
+                "responder à solicitação do usuário"
                 )
         ));
 
@@ -228,8 +281,84 @@ public class ChatApplicationService {
                 completedAt,
                 "ASSISTANT",
                 prepared.files().stream().map(GroundingFileDto::from).toList()
-                , result.status()
+                , result.status(), false
         );
+    }
+
+    public ChatMessageDto requestPrivacyReview(UUID fileId, String ownerSubject) {
+        if (fileId == null || documentService == null) {
+            throw new IllegalArgumentException("O arquivo da revisão de privacidade é obrigatório");
+        }
+        ConversationScopeService.ConversationScope scope = conversationScopeService.resolve(ownerSubject);
+        ChatFile file = documentService.findOwned(fileId, scope.conversationId(), ownerSubject);
+        if (file.status() != DocumentStatus.NEEDS_REVIEW && file.status() != DocumentStatus.FAILED) {
+            throw new IllegalArgumentException("O arquivo não está aguardando revisão de privacidade");
+        }
+
+        UUID messageId = UUID.randomUUID();
+        Instant timestamp = Instant.now();
+        String content = "Encontrei um problema ao analisar o arquivo " + file.originalName()
+                + ". Por segurança, ele está bloqueado e não será usado nesta conversa até que a análise seja concluída."
+                + (file.errorMessage() == null || file.errorMessage().isBlank()
+                        ? ""
+                        : " O que aconteceu: " + file.errorMessage())
+                + " Você prefere que eu tente processá-lo novamente ou que eu mantenha o arquivo bloqueado?"
+                + " Responda com suas próprias palavras.";
+        Map<String, Object> metadata = new HashMap<>();
+        metadata.put("messageId", messageId.toString());
+        metadata.put("timestamp", timestamp.toString());
+        metadata.put("messageKind", "PRIVACY_REVIEW");
+        metadata.put("privacyFileId", fileId.toString());
+        metadata.put("rawContent", content);
+        AssistantMessage message = AssistantMessage.builder().content(content).properties(metadata).build();
+        chatMemory.add(scope.conversationId(), message);
+        return ChatMessageDto.fromMessage(message);
+    }
+
+    private ChatResult executePrivacyReview(
+            UUID runId,
+            String prompt,
+            UUID fileId,
+            ConversationScopeService.ConversationScope scope,
+            String ownerSubject,
+            Instant createdAt,
+            UUID interactionId,
+            UUID userMessageId,
+            UUID assistantMessageId
+    ) {
+        if (documentService == null) {
+            throw new IllegalStateException("O serviço de documentos não está disponível");
+        }
+        PrivacyConsentInterpreter.Review review = privacyConsentInterpreter.interpretReview(prompt);
+        ChatFile file = documentService.findOwned(fileId, scope.conversationId(), ownerSubject);
+        String response;
+        boolean resolved = false;
+        switch (review.intent()) {
+            case "RETRY_ANALYSIS" -> {
+                documentService.retry(fileId, scope.conversationId(), ownerSubject);
+                response = "Entendi. Vou tentar processar novamente o arquivo " + file.originalName()
+                        + ". Ele continuará bloqueado até a análise local terminar.";
+                resolved = true;
+            }
+            case "KEEP_BLOCKED" -> {
+                response = "Tudo bem. Vou manter o arquivo " + file.originalName()
+                        + " bloqueado e não o usarei nesta conversa.";
+                resolved = true;
+            }
+            default -> response = "Não consegui identificar sua decisão. Você quer que eu tente processar o arquivo novamente ou prefere mantê-lo bloqueado?";
+        }
+
+        Instant completedAt = Instant.now();
+        interactionService.persistCompleted(
+                interactionId, userMessageId, assistantMessageId, prompt, response,
+                scope.conversationId(), ownerSubject, createdAt, completedAt, List.of());
+        persistConversationMemory(
+                scope.conversationId(), prompt, response, createdAt, completedAt,
+                interactionId, userMessageId, assistantMessageId);
+        return new ChatResult(
+                interactionId, userMessageId, assistantMessageId, response, completedAt,
+                "ASSISTANT", List.of(),
+                br.com.geangc.sistema_mr.agent.model.AgentRunStatus.COMPLETED, resolved);
     }
 
     private static String acknowledgement(String prompt, List<UUID> attachmentIds) {
@@ -242,18 +371,8 @@ public class ChatApplicationService {
         return "Entendi. Vou cuidar disso agora.";
     }
 
-    private static boolean awaitingPrivacyConsent(List<Message> messages) {
-        for (int index = messages.size() - 1; index >= 0; index--) {
-            if (messages.get(index) instanceof AssistantMessage assistant) {
-                String text = assistant.getText();
-                return text != null && (text.contains("Posso") || text.contains("posso")
-                        || text.contains("autoriza") || text.contains("autorizar"));
-            }
-            if (messages.get(index) instanceof UserMessage) {
-                return false;
-            }
-        }
-        return false;
+    private static boolean isPrivacyReviewMessage(Message message) {
+        return "PRIVACY_REVIEW".equals(String.valueOf(message.getMetadata().get("messageKind")));
     }
 
     private static String preparingMessage(String prompt, List<UUID> attachmentIds) {
@@ -323,7 +442,8 @@ public class ChatApplicationService {
             Instant timestamp,
             String messageType,
             List<GroundingFileDto> groundingFiles,
-            br.com.geangc.sistema_mr.agent.model.AgentRunStatus status
+            br.com.geangc.sistema_mr.agent.model.AgentRunStatus status,
+            boolean privacyReviewResolved
     ) {}
 
     public record ChatStart(UUID runId, String acknowledgement, Instant timestamp) {}

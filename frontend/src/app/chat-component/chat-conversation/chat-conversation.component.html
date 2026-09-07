@@ -46,7 +46,10 @@
     @for (msg of messages(); track msg.messageId ?? $index) {
       <div
         [class]="'chat-bubble ' + (msg.messageType === 'USER' ? 'user' : 'assistant')"
-        [ngClass]="{ invalid: msg.notValid }"
+        [ngClass]="{
+          invalid: msg.notValid,
+          'privacy-review-message': msg.messageKind === 'PRIVACY_REVIEW',
+        }"
       >
         <div class="bubble-header">
           <strong>{{ msg.messageType === 'USER' ? userName() : 'Gemini' }}</strong>

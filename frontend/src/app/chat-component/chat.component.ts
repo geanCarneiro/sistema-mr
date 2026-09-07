@@ -144,6 +144,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
+  solicitarRevisaoPrivacidade(file: IChatFile): void {
+    this.aiChatService.solicitarRevisaoPrivacidade(file);
+  }
+
   isProcessing(file: IChatFile): boolean {
     return ['QUEUED', 'EXTRACTING', 'EMBEDDING'].includes(file.status);
   }

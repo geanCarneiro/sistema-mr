@@ -41,8 +41,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
       GOOGLE_API_CLIENT_ID: ${GOOGLE_API_CLIENT_ID}
       JWT_SECRET: ${JWT_SECRET}
+      DOCUMENT_MAPPING_ENCRYPTION_KEY: ${DOCUMENT_MAPPING_ENCRYPTION_KEY}
       PYTHON_RUNNER_URL: http://python-runner:8081
       OCR_SERVICE_URL: http://ocr-service:8082
+      DOCUMENT_EMBEDDING_SERVICE_URL: http://local-ai-service:8083
+      LOCAL_AI_SERVICE_URL: http://local-ai-service:8083
       FILE_STORAGE_ROOT: /app/data/files
     volumes:
       # Mantém o armazenamento documental compartilhado com a execução local
@@ -54,6 +57,8 @@ services:
       python-runner:
         condition: service_healthy
       ocr-service:
+        condition: service_healthy
+      local-ai-service:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -145,9 +150,55 @@ services:
     networks:
       - ocr
 
+  # --------------------------------------------------------
+  # 6. IA local CPU: embeddings, decisão e visão com Gemma 3 4B IT
+  # --------------------------------------------------------
+  local-ai-service:
+    build:
+      context: ./local-ai-service
+      dockerfile: Dockerfile
+    container_name: local-ai-service
+    ports:
+      - "127.0.0.1:8083:8083"
+    init: true
+    read_only: true
+    volumes:
+      - local_ai_models:/models
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 6g
+    cpus: 4.0
+    environment:
+      EMBEDDING_MODEL: intfloat/multilingual-e5-small
+      EMBEDDING_DEVICE: cpu
+      LOCAL_CHAT_MODEL_PATH: /models/gemma-3-4b-it-q4_0.gguf
+      LOCAL_CHAT_MODEL_NAME: gemma-3-4b-it-q4
+      LOCAL_CHAT_CONTEXT_SIZE: 8192
+      LOCAL_CHAT_THREADS: 4
+      LOCAL_CHAT_FORMAT: gemma-3
+      LOCAL_VISION_PROJECTOR_PATH: /models/mmproj-model-f16.gguf
+      OMP_NUM_THREADS: 4
+      MKL_NUM_THREADS: 4
+      TOKENIZERS_PARALLELISM: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8083/health', timeout=2)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    networks:
+      - application
+
 volumes:
   neo4j_data:
   neo4j_logs:
+  local_ai_models:
 
 networks:
   application:

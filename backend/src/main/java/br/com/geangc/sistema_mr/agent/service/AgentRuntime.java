@@ -136,14 +136,18 @@ public class AgentRuntime {
                     return fail(run, "RUN_MODEL_INVOCATION_LIMIT_EXCEEDED");
                 }
 
+                boolean localOnly = command.dataConstraints().localOnly();
+                String routeId = localOnly
+                        ? properties.localRouteConfig().id()
+                        : properties.defaultRouteConfig().id();
                 ModelRequest request = new ModelRequest(
                         run.id(),
-                        properties.defaultRouteConfig().id(),
+                        routeId,
                         conversation,
                         command.tools().stream().map(AgentTool::callback).toList(),
                         toolContext(command),
                         command.dataConstraints(),
-                        ProviderSelectionPolicy.AUTO,
+                        localOnly ? ProviderSelectionPolicy.LOCAL_ONLY : ProviderSelectionPolicy.AUTO,
                         properties.limits().maxSteps() - modelInvocations,
                         properties.limits().maxModelInvocations() - modelInvocations,
                         properties.limits().maxToolCalls() - toolCalls

@@ -1,7 +1,7 @@
 package br.com.geangc.sistema_mr.service;
 
 import br.com.geangc.sistema_mr.configuration.DocumentProperties;
-import br.com.geangc.sistema_mr.configuration.DocumentVisionResponse;
+import br.com.geangc.sistema_mr.agent.gateway.LocalModelProvider;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +18,7 @@ import org.apache.tika.parser.ParseContext;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.BodyContentHandler;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.xml.sax.SAXException;
 
 @Component
@@ -27,16 +28,21 @@ public class DocumentExtractor {
 
     private final DocumentProperties properties;
     private final PaddleOcrClient paddleOcrClient;
-    private final DocumentVisionExtractor visionExtractor;
+    private final LocalModelProvider localModelProvider;
 
+    @Autowired
     public DocumentExtractor(
             DocumentProperties properties,
             PaddleOcrClient paddleOcrClient,
-            DocumentVisionExtractor visionExtractor
+            LocalModelProvider localModelProvider
     ) {
         this.properties = properties;
         this.paddleOcrClient = paddleOcrClient;
-        this.visionExtractor = visionExtractor;
+        this.localModelProvider = localModelProvider;
+    }
+
+    public DocumentExtractor(DocumentProperties properties, PaddleOcrClient paddleOcrClient) {
+        this(properties, paddleOcrClient, null);
     }
 
     public ExtractionResult extract(Path path, String originalName, String mimeType) throws Exception {
@@ -59,20 +65,17 @@ public class DocumentExtractor {
         try {
             ocr = paddleOcrClient.extract(path, originalName, mimeType);
         } catch (OcrInfrastructureException exception) {
-            throw exception;
+            return extractWithLocalVision(path, originalName, mimeType,
+                    "OCR local indisponível: " + safeReason(exception));
         } catch (OcrProcessingException exception) {
-            return extractWithVisionFallback(
-                    path,
-                    originalName,
-                    mimeType,
-                    "Falha operacional do PaddleOCR: " + safeReason(exception)
-            );
+            return extractWithLocalVision(path, originalName, mimeType,
+                    "OCR local falhou: " + safeReason(exception));
         }
 
         String text = ocrText(ocr.lines());
         String insufficiency = insufficiencyReason(ocr, text);
         if (insufficiency != null) {
-            return extractWithVisionFallback(path, originalName, mimeType, insufficiency);
+            return extractWithLocalVision(path, originalName, mimeType, insufficiency);
         }
         String model = ocr.model() == null || ocr.model().isBlank() ? "modelo local" : ocr.model();
         return textResult(
@@ -84,56 +87,42 @@ public class DocumentExtractor {
         );
     }
 
-    private ExtractionResult extractWithVisionFallback(
+    private ExtractionResult extractWithLocalVision(
             Path path,
             String originalName,
             String mimeType,
-            String reason
-    ) {
-        var extraction = visionExtractor.extract(path, originalName, mimeType, reason);
-        DocumentVisionResponse response = extraction.response();
-        String transcription = response.transcription().isBlank()
-                ? "_Nenhum texto legível identificado._"
-                : response.transcription();
-        String visualDescription = response.visualDescription().isBlank()
-                ? "_Nenhum elemento visual adicional relevante._"
-                : response.visualDescription();
-        String uncertainties = response.uncertainSegments().isEmpty()
-                ? "_Nenhuma incerteza registrada._"
-                : response.uncertainSegments().stream().map(item -> "- " + item).collect(Collectors.joining("\n"));
-        String languages = response.detectedLanguages().isEmpty()
-                ? "não identificado"
-                : String.join(", ", response.detectedLanguages());
-
-        String method = "Gemini multimodal (fallback do PaddleOCR; " + extraction.model() + ")";
-        String markdown = """
-                # Arquivo: %s
-
-                - Tipo: `%s`
-                - Extração: %s
-                - Idiomas identificados: %s
-
-                ## Transcrição
-
-                %s
-
-                ## Descrição visual
-
-                %s
-
-                ## Incertezas da extração
-
-                %s
-                """.formatted(
-                originalName,
-                mimeType,
-                method,
-                languages,
-                transcription,
-                visualDescription,
-                uncertainties
-        );
-        return new ExtractionResult(markdown.strip(), method, reason);
+            String fallbackReason
+    ) throws Exception {
+        if (localModelProvider == null) {
+            throw new DocumentNeedsReviewException(fallbackReason + "; visão local não configurada");
+        }
+        try {
+            LocalModelProvider.LocalVision vision = localModelProvider.vision(
+                    path,
+                    mimeType,
+                    "Interprete a imagem documental. "
+                            + "Faça uma transcrição fiel do texto e descreva elementos visuais relevantes. "
+                            + "Motivo para tentar a visão local: " + fallbackReason
+            );
+            if (vision.content() == null || vision.content().isBlank()) {
+                throw new DocumentNeedsReviewException("A visão local não produziu conteúdo para " + originalName);
+            }
+            return textResult(
+                    originalName,
+                    mimeType,
+                    "Gemma 3 4B IT local (fallback visual)",
+                    vision.content().strip(),
+                    fallbackReason
+            );
+        } catch (DocumentNeedsReviewException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw new DocumentNeedsReviewException(
+                    "OCR insuficiente e a visão local não conseguiu interpretar "
+                            + originalName + ": " + safeReason(exception),
+                    exception
+            );
+        }
     }
 
     private TikaExtraction extractWithTika(Path path, String originalName) throws Exception {

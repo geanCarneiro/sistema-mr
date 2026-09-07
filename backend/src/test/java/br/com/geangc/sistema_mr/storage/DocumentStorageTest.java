@@ -30,9 +30,13 @@ class DocumentStorageTest {
                 new ByteArrayInputStream("conteúdo original".getBytes(StandardCharsets.UTF_8))
         );
         String contextKey = storage.writeContext(id, "# versão textual");
+        String fullContextKey = storage.writeFullContext(id, "# versão original");
+        String mappingKey = storage.writeMapping(id, new byte[]{1, 2, 3});
 
         assertTrue(Files.exists(original.path()));
         assertEquals("# versão textual", storage.readText(contextKey));
+        assertEquals("# versão original", storage.readText(fullContextKey));
+        assertEquals(3, storage.readBytes(mappingKey).length);
         assertEquals(64, original.sha256().length());
 
         storage.delete(id);

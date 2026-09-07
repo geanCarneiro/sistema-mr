@@ -3,7 +3,7 @@ import { firstValueFrom, of } from 'rxjs';
 import { apiPrefixInterceptor } from './api-prefix.interceptor';
 
 describe('apiPrefixInterceptor', () => {
-  it('adds the routing prefix even when the backend path already starts with api', async () => {
+  it('adds the routing prefix to a backend path', async () => {
     let forwardedRequest: HttpRequest<unknown> | undefined;
     const next: HttpHandlerFn = (request) => {
       forwardedRequest = request;
@@ -11,10 +11,10 @@ describe('apiPrefixInterceptor', () => {
     };
 
     await firstValueFrom(
-      apiPrefixInterceptor(new HttpRequest('POST', '/api/v1/auth/google', null), next),
+      apiPrefixInterceptor(new HttpRequest('POST', '/v1/auth/google', null), next),
     );
 
-    expect(forwardedRequest?.url).toBe('/api/api/v1/auth/google');
+    expect(forwardedRequest?.url).toBe('/api/v1/auth/google');
   });
 
   it('does not modify external urls', async () => {

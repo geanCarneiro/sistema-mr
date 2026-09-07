@@ -13,7 +13,11 @@ describe('AttachmentPanelComponent', () => {
 
     fixture = TestBed.createComponent(AttachmentPanelComponent);
     component = fixture.componentInstance;
-    fixture.componentRef.setInput('files', [file('manual', 'READY'), file('failed', 'FAILED')]);
+    fixture.componentRef.setInput('files', [
+      file('manual', 'READY'),
+      file('failed', 'FAILED'),
+      file('review', 'NEEDS_REVIEW'),
+    ]);
     await fixture.whenStable();
   });
 
@@ -64,6 +68,27 @@ describe('AttachmentPanelComponent', () => {
     expect(element.querySelector('button[aria-label="Baixar manual.pdf"]')).not.toBeNull();
     expect(element.querySelector('button[aria-label="Excluir manual.pdf"]')).not.toBeNull();
     expect(element.querySelector('button[aria-label="Reprocessar failed.pdf"]')).not.toBeNull();
+    expect(element.textContent).toContain('Revisão necessária');
+    expect(
+      element.querySelector('button[aria-label="Revisar privacidade de review.pdf"]'),
+    ).not.toBeNull();
+  });
+
+  it('opens a privacy review dialog for documents that need review', () => {
+    const review = file('review', 'NEEDS_REVIEW');
+    review.errorMessage = 'OCR local insuficiente';
+    component.abrirRevisao(review);
+    fixture.detectChanges();
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('[role="dialog"]')?.textContent).toContain(
+      'OCR local insuficiente',
+    );
+    expect(element.textContent).toContain('não será usado no chat');
+
+    component.fecharRevisao();
+    fixture.detectChanges();
+    expect(element.querySelector('[role="dialog"]')).toBeNull();
   });
 
   function file(id: string, status: IChatFile['status']): IChatFile {

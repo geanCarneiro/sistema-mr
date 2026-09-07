@@ -6,8 +6,8 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  // Este /api é o prefixo de roteamento do frontend. O proxy remove somente
-  // essa primeira ocorrência; um /api já presente na URL pertence ao backend.
+  // Este /api é o prefixo de roteamento do frontend. Os serviços usam apenas
+  // o caminho da API; o proxy remove este prefixo antes de chegar ao backend.
   const urlComBarra = req.url.startsWith('/') ? req.url : `/${req.url}`;
 
   const apiReq = req.clone({

@@ -58,6 +58,7 @@
         [class.selected]="anexoSelecionado(file.id)"
         [class.selectable]="file.status === 'READY'"
         [class.failed]="file.status === 'FAILED'"
+        [class.needs-review]="file.status === 'NEEDS_REVIEW'"
       >
         <div class="file-checkbox">
           <p-checkbox
@@ -73,16 +74,30 @@
           <span class="file-name" [title]="file.name">{{ file.name }}</span>
           <span class="file-meta">
             {{ file.size / 1024 | number: '1.0-1' }} KB ·
-            <span [class.status-failed]="file.status === 'FAILED'">{{
-              statusLabel(file.status)
-            }}</span>
+            <span
+              [class.status-failed]="file.status === 'FAILED'"
+              [class.status-needs-review]="file.status === 'NEEDS_REVIEW'"
+              >{{ statusLabel(file.status) }}</span
+            >
           </span>
           @if (file.errorMessage) {
             <span class="file-error" [title]="file.errorMessage">{{ file.errorMessage }}</span>
           }
         </label>
         <div class="file-actions">
-          @if (file.status === 'FAILED') {
+          @if (file.status === 'NEEDS_REVIEW') {
+            <button
+              pButton
+              type="button"
+              severity="danger"
+              aria-label="Revisar privacidade de {{ file.name }}"
+              title="Revisar privacidade"
+              (click)="abrirRevisao(file)"
+            >
+              <svg data-p-icon="exclamation-triangle" pButtonIcon aria-hidden="true"></svg>
+            </button>
+          }
+          @if (file.status === 'FAILED' || file.status === 'NEEDS_REVIEW') {
             <button
               pButton
               type="button"
@@ -121,4 +136,39 @@
       </div>
     }
   </div>
+
+  @if (reviewFile(); as file) {
+    <div class="review-backdrop" role="presentation" (click)="fecharRevisao()">
+      <section
+        class="review-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="privacy-review-title"
+        (click)="$event.stopPropagation()"
+      >
+        <h4 id="privacy-review-title">Revisão de privacidade</h4>
+        <p class="review-file-name">{{ file.name }}</p>
+        <p>
+          Este documento está bloqueado porque a análise local não foi concluída com segurança. Ele
+          não será usado no chat enquanto estiver nesta situação.
+        </p>
+        @if (file.errorMessage) {
+          <p class="review-reason">{{ file.errorMessage }}</p>
+        }
+        <div class="review-actions">
+          <button pButton type="button" severity="secondary" (click)="fecharRevisao()">
+            Fechar
+          </button>
+          <button
+            pButton
+            type="button"
+            severity="warn"
+            (click)="reprocessarArquivo(file); fecharRevisao()"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      </section>
+    </div>
+  }
 </aside>

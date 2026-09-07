@@ -93,8 +93,8 @@ public class DocumentService {
 
     public ChatFile retry(UUID id, String conversationId, String ownerSubject) {
         ChatFile existing = owned(id, conversationId, ownerSubject);
-        if (existing.status() != DocumentStatus.FAILED) {
-            throw new IllegalArgumentException("Apenas arquivos com status FAILED podem ser reprocessados");
+        if (existing.status() != DocumentStatus.FAILED && existing.status() != DocumentStatus.NEEDS_REVIEW) {
+            throw new IllegalArgumentException("Apenas arquivos com status FAILED ou NEEDS_REVIEW podem ser reprocessados");
         }
         ChatFile reset = repository.resetForRetry(id, conversationId, ownerSubject)
                 .orElseThrow(DocumentNotFoundException::new);

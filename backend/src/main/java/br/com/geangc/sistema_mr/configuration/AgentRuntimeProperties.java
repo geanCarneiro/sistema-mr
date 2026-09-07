@@ -62,4 +62,11 @@ public record AgentRuntimeProperties(
                 .orElseThrow(() -> new IllegalStateException(
                         "A rota padrão do AgentRuntime não está habilitada: " + defaultRoute));
     }
+
+    public Route localRouteConfig() {
+        return routes.stream()
+                .filter(route -> route.enabled() && "local-ai".equals(route.provider()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Nenhuma rota local do AgentRuntime está habilitada"));
+    }
 }

@@ -26,83 +26,67 @@ class DocumentExtractorTest {
     @Test
     void usesLocalOcrWhenResultIsSufficient() throws Exception {
         PaddleOcrClient paddle = mock(PaddleOcrClient.class);
-        DocumentVisionExtractor vision = mock(DocumentVisionExtractor.class);
         Path image = Files.write(temporaryDirectory.resolve("poster.png"), new byte[]{1, 2, 3});
         when(paddle.extract(image, "poster.png", "image/png")).thenReturn(result(
                 List.of(line("LÉO LINS ENTERRADO VIVO", .97)), .97
         ));
 
-        var extraction = new DocumentExtractor(properties(), paddle, vision)
+        var extraction = new DocumentExtractor(properties(), paddle)
                 .extract(image, "poster.png", "image/png");
 
         assertTrue(extraction.contextMarkdown().contains("LÉO LINS ENTERRADO VIVO"));
         assertTrue(extraction.method().contains("PaddleOCR"));
-        verifyNoInteractions(vision);
     }
 
     @Test
     void doesNotUseGeminiWhenLocalOcrInfrastructureIsUnavailable() throws Exception {
         PaddleOcrClient paddle = mock(PaddleOcrClient.class);
-        DocumentVisionExtractor vision = mock(DocumentVisionExtractor.class);
         Path image = Files.write(temporaryDirectory.resolve("poster.png"), new byte[]{1});
         when(paddle.extract(image, "poster.png", "image/png"))
                 .thenThrow(new OcrInfrastructureException("PaddleOCR indisponível"));
 
         assertThrows(
-                OcrInfrastructureException.class,
-                () -> new DocumentExtractor(properties(), paddle, vision)
+                DocumentNeedsReviewException.class,
+                () -> new DocumentExtractor(properties(), paddle)
                         .extract(image, "poster.png", "image/png")
         );
-        verifyNoInteractions(vision);
     }
 
     @Test
-    void usesGeminiWhenLocalOcrResultIsInsufficient() throws Exception {
+    void requestsHumanReviewWhenLocalOcrResultIsInsufficient() throws Exception {
         PaddleOcrClient paddle = mock(PaddleOcrClient.class);
-        DocumentVisionExtractor vision = mock(DocumentVisionExtractor.class);
         Path image = Files.write(temporaryDirectory.resolve("poster.png"), new byte[]{1});
         when(paddle.extract(image, "poster.png", "image/png"))
                 .thenReturn(result(List.of(line("LÉO", .99)), .99));
-        when(vision.extract(eq(image), eq("poster.png"), eq("image/png"), contains("insuficiente")))
-                .thenReturn(visionResult("LÉO LINS", "Cartaz de uma peça de humor"));
+        var exception = assertThrows(DocumentNeedsReviewException.class, () ->
+                new DocumentExtractor(properties(), paddle).extract(image, "poster.png", "image/png"));
 
-        var extraction = new DocumentExtractor(properties(), paddle, vision)
-                .extract(image, "poster.png", "image/png");
-
-        assertTrue(extraction.contextMarkdown().contains("Cartaz de uma peça de humor"));
-        assertTrue(extraction.method().contains("Gemini multimodal"));
-        assertTrue(extraction.warning().contains("insuficiente"));
+        assertTrue(exception.getMessage().contains("insuficiente"));
     }
 
     @Test
-    void usesGeminiWhenLocalOcrInferenceFails() throws Exception {
+    void requestsHumanReviewWhenLocalOcrInferenceFails() throws Exception {
         PaddleOcrClient paddle = mock(PaddleOcrClient.class);
-        DocumentVisionExtractor vision = mock(DocumentVisionExtractor.class);
         Path image = Files.write(temporaryDirectory.resolve("poster.png"), new byte[]{1});
         when(paddle.extract(image, "poster.png", "image/png"))
                 .thenThrow(new OcrProcessingException("timeout"));
-        when(vision.extract(eq(image), eq("poster.png"), eq("image/png"), contains("timeout")))
-                .thenReturn(visionResult("LÉO LINS", "Cartaz de uma peça de humor"));
+        var exception = assertThrows(DocumentNeedsReviewException.class, () ->
+                new DocumentExtractor(properties(), paddle).extract(image, "poster.png", "image/png"));
 
-        var extraction = new DocumentExtractor(properties(), paddle, vision)
-                .extract(image, "poster.png", "image/png");
-
-        assertTrue(extraction.method().contains("Gemini multimodal"));
-        verify(vision).extract(eq(image), eq("poster.png"), eq("image/png"), contains("timeout"));
+        assertTrue(exception.getMessage().contains("timeout"));
     }
 
     @Test
     void keepsTikaForDocumentsWithNativeText() throws Exception {
         PaddleOcrClient paddle = mock(PaddleOcrClient.class);
-        DocumentVisionExtractor vision = mock(DocumentVisionExtractor.class);
         Path textFile = Files.writeString(temporaryDirectory.resolve("notas.txt"), "conteúdo textual nativo");
 
-        var extraction = new DocumentExtractor(properties(), paddle, vision)
+        var extraction = new DocumentExtractor(properties(), paddle)
                 .extract(textFile, "notas.txt", "text/plain");
 
         assertEquals("Apache Tika", extraction.method());
         assertTrue(extraction.contextMarkdown().contains("conteúdo textual nativo"));
-        verifyNoInteractions(paddle, vision);
+        verifyNoInteractions(paddle);
     }
 
     private static PaddleOcrClient.OcrResult result(List<PaddleOcrClient.OcrLine> lines, double confidence) {
@@ -111,14 +95,6 @@ class DocumentExtractorTest {
 
     private static PaddleOcrClient.OcrLine line(String text, double confidence) {
         return new PaddleOcrClient.OcrLine(0, text, confidence, List.of());
-    }
-
-    private static DocumentVisionExtractor.VisionExtraction visionResult(String text, String description) {
-        return new DocumentVisionExtractor.VisionExtraction(
-                new DocumentVisionResponse(text, description, List.of(), List.of("pt")),
-                "gemini-3.1-flash-lite",
-                "OCR insuficiente"
-        );
     }
 
     private static DocumentProperties properties() {

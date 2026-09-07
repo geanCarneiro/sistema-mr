@@ -26,12 +26,11 @@ public class PaddleOcrAvailabilityValidator implements ApplicationRunner {
             var health = client.health();
             LOGGER.info("PaddleOCR disponível: model={}, engine={}", health.model(), health.engine());
         } catch (OcrInfrastructureException exception) {
-            LOGGER.error(
-                    "PaddleOCR é uma dependência mínima da aplicação e não está disponível. "
-                            + "O fallback Gemini não será usado para falhas de infraestrutura OCR.",
+            LOGGER.warn(
+                    "PaddleOCR local não está disponível; documentos visuais ficarão em NEEDS_REVIEW "
+                            + "até que a análise local possa ser concluída.",
                     exception
             );
-            throw exception;
         }
     }
 }

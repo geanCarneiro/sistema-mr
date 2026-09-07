@@ -1,3 +1,4 @@
 .env
 python-runner/__pycache__/
+local-ai-service/__pycache__/
 backend/data/

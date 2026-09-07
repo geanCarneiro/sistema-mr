@@ -6,23 +6,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DocumentEmbeddingService {
 
-    private static final String DOCUMENT_PREFIX = "Represent this document for retrieval:\n";
-    private static final String QUERY_PREFIX = "Represent this query for retrieving relevant documents:\n";
+    private static final String DOCUMENT_PREFIX = "passage: ";
+    private static final String QUERY_PREFIX = "query: ";
 
-    private final EmbeddingModel embeddingModel;
+    private final DocumentEmbeddingProvider embeddingProvider;
     private final DocumentProperties properties;
     private final TokenTextSplitter splitter;
 
-    public DocumentEmbeddingService(EmbeddingModel embeddingModel, DocumentProperties properties) {
-        this.embeddingModel = embeddingModel;
+    public DocumentEmbeddingService(DocumentEmbeddingProvider embeddingProvider, DocumentProperties properties) {
+        this.embeddingProvider = embeddingProvider;
         this.properties = properties;
         this.splitter = TokenTextSplitter.builder()
                 .withChunkSize(properties.chunkSize())
@@ -41,18 +39,14 @@ public class DocumentEmbeddingService {
                     .map(Document::getText)
                     .map(text -> DOCUMENT_PREFIX + text)
                     .toList();
-            var response = embeddingModel.call(new EmbeddingRequest(inputs, null));
-            var results = response.getResults();
-            if (results.size() != inputs.size()) {
-                throw new IllegalStateException("A API de embeddings retornou uma quantidade inesperada de vetores");
-            }
+            List<float[]> results = embeddingProvider.embed(inputs);
             for (int index = 0; index < results.size(); index++) {
                 String chunkText = splitDocuments.get(start + index).getText();
                 chunks.add(new DocumentChunk(
                         UUID.randomUUID(),
                         start + index,
                         chunkText,
-                        toList(results.get(index).getOutput())
+                        toList(results.get(index))
                 ));
             }
         }
@@ -60,7 +54,7 @@ public class DocumentEmbeddingService {
     }
 
     public List<Float> embedQuery(String query) {
-        return toList(embeddingModel.embed(QUERY_PREFIX + query));
+        return toList(embeddingProvider.embed(List.of(QUERY_PREFIX + query)).getFirst());
     }
 
     public int estimateTokens(String text) {

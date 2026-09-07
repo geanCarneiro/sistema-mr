@@ -50,8 +50,26 @@ public class DocumentStorage {
         return key;
     }
 
+    public String writeFullContext(UUID id, String context) throws IOException {
+        Files.createDirectories(fileDirectory(id));
+        String key = id + "/context.full.md";
+        Files.writeString(resolve(key), context, StandardCharsets.UTF_8);
+        return key;
+    }
+
+    public String writeMapping(UUID id, byte[] encryptedMapping) throws IOException {
+        Files.createDirectories(fileDirectory(id));
+        String key = id + "/mapping.enc";
+        Files.write(resolve(key), encryptedMapping);
+        return key;
+    }
+
     public String readText(String key) throws IOException {
         return Files.readString(resolve(key), StandardCharsets.UTF_8);
+    }
+
+    public byte[] readBytes(String key) throws IOException {
+        return Files.readAllBytes(resolve(key));
     }
 
     public Path path(String key) {

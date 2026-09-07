@@ -89,4 +89,27 @@ class DocumentServiceTest {
         assertThrows(DocumentNotFoundException.class, () -> service.retry(id, convId, owner));
         verifyNoInteractions(ingestionService);
     }
+
+    @Test
+    void retryAcceptsDocumentsThatNeedPrivacyReview() {
+        UUID id = UUID.randomUUID();
+        String convId = "chat-user1";
+        String owner = "user1";
+        Instant now = Instant.now();
+        ChatFile reviewFile = new ChatFile(
+                id, convId, owner, "review.pdf", "application/pdf", 10, "sha",
+                "key/original", null, DocumentStatus.NEEDS_REVIEW, "OCR insuficiente", 0,
+                "multilingual-e5-small", now, now
+        );
+        ChatFile reset = new ChatFile(
+                id, convId, owner, "review.pdf", "application/pdf", 10, "sha",
+                "key/original", null, DocumentStatus.QUEUED, null, 0,
+                "multilingual-e5-small", now, now
+        );
+        when(repository.findOwned(id, convId, owner)).thenReturn(Optional.of(reviewFile));
+        when(repository.resetForRetry(id, convId, owner)).thenReturn(Optional.of(reset));
+
+        assertEquals(DocumentStatus.QUEUED, service.retry(id, convId, owner).status());
+        verify(ingestionService).process(id);
+    }
 }

@@ -2,6 +2,9 @@ package br.com.geangc.sistema_mr.service;
 
 import br.com.geangc.sistema_mr.configuration.DocumentProperties;
 import br.com.geangc.sistema_mr.model.ChatFile;
+import br.com.geangc.sistema_mr.privacy.PrivacyDecision;
+import br.com.geangc.sistema_mr.privacy.PrivacyMode;
+import br.com.geangc.sistema_mr.privacy.PrivacyPolicyEngine;
 import br.com.geangc.sistema_mr.repository.DocumentRepository;
 import br.com.geangc.sistema_mr.storage.DocumentStorage;
 import java.io.IOException;
@@ -23,6 +26,21 @@ public class GroundingContextService {
     private final DocumentStorage storage;
     private final DocumentEmbeddingService embeddingService;
     private final DocumentProperties properties;
+    private final PrivacyPolicyEngine privacyPolicyEngine;
+
+    public GroundingContextService(
+            DocumentRepository repository,
+            DocumentStorage storage,
+            DocumentEmbeddingService embeddingService,
+            DocumentProperties properties,
+            PrivacyPolicyEngine privacyPolicyEngine
+    ) {
+        this.repository = repository;
+        this.storage = storage;
+        this.embeddingService = embeddingService;
+        this.properties = properties;
+        this.privacyPolicyEngine = privacyPolicyEngine;
+    }
 
     public GroundingContextService(
             DocumentRepository repository,
@@ -30,10 +48,7 @@ public class GroundingContextService {
             DocumentEmbeddingService embeddingService,
             DocumentProperties properties
     ) {
-        this.repository = repository;
-        this.storage = storage;
-        this.embeddingService = embeddingService;
-        this.properties = properties;
+        this(repository, storage, embeddingService, properties, new PrivacyPolicyEngine());
     }
 
     public PreparedPrompt prepare(
@@ -102,7 +117,10 @@ public class GroundingContextService {
         }
 
         if (included.isEmpty()) {
-            return new PreparedPrompt(userPrompt, List.of());
+            return new PreparedPrompt(userPrompt, List.of(),
+                    new PrivacyDecision(PrivacyMode.CLOUD_MINIMIZED,
+                            br.com.geangc.sistema_mr.model.DocumentSensitivity.NORMAL,
+                            "PROMPT_ONLY", "Nenhum documento foi incluído"));
         }
 
         String modelPrompt = """
@@ -116,7 +134,18 @@ public class GroundingContextService {
                 %s
                 </solicitacao_usuario>
                 """.formatted(context, userPrompt);
-        return new PreparedPrompt(modelPrompt, List.copyOf(included));
+        List<ChatFile> includedFiles = included.stream()
+                .map(file -> selected.values().stream()
+                        .filter(selection -> selection.file().id().equals(file.id()))
+                        .map(SelectedFile::file)
+                        .findFirst()
+                        .orElseThrow())
+                .toList();
+        return new PreparedPrompt(
+                modelPrompt,
+                List.copyOf(included),
+                privacyPolicyEngine.decide(includedFiles)
+        );
     }
 
     private static String escapeAttribute(String value) {
@@ -127,5 +156,17 @@ public class GroundingContextService {
 
     public record GroundingFile(UUID id, String name, boolean explicitlyAttached, Double similarity) {}
 
-    public record PreparedPrompt(String modelPrompt, List<GroundingFile> files) {}
+    public record PreparedPrompt(
+            String modelPrompt,
+            List<GroundingFile> files,
+            PrivacyDecision privacyDecision
+    ) {
+        public PreparedPrompt(String modelPrompt, List<GroundingFile> files) {
+            this(modelPrompt, files, new PrivacyDecision(
+                    PrivacyMode.CLOUD_MINIMIZED,
+                    br.com.geangc.sistema_mr.model.DocumentSensitivity.NORMAL,
+                    "PROMPT_ONLY",
+                    "Nenhum documento foi incluído"));
+        }
+    }
 }

@@ -4,6 +4,7 @@ public enum DocumentStatus {
     QUEUED,
     EXTRACTING,
     EMBEDDING,
+    NEEDS_REVIEW,
     READY,
     FAILED
 }

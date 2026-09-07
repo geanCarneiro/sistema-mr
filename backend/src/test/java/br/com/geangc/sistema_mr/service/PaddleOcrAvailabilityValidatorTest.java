@@ -1,7 +1,6 @@
 package br.com.geangc.sistema_mr.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -22,13 +21,11 @@ class PaddleOcrAvailabilityValidatorTest {
     }
 
     @Test
-    void failsApplicationStartupWhenLocalOcrIsUnavailable() {
+    void keepsApplicationAvailableWhenLocalOcrIsUnavailable() {
         PaddleOcrClient client = mock(PaddleOcrClient.class);
         when(client.health()).thenThrow(new OcrInfrastructureException("indisponível"));
 
-        assertThrows(
-                OcrInfrastructureException.class,
-                () -> new PaddleOcrAvailabilityValidator(client).run(new DefaultApplicationArguments())
-        );
+        assertDoesNotThrow(() -> new PaddleOcrAvailabilityValidator(client)
+                .run(new DefaultApplicationArguments()));
     }
 }

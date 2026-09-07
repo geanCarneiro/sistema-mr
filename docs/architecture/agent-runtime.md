@@ -2,7 +2,7 @@
 
 > **Status:** referência arquitetural consolidada para implementação
 > **Escopo:** BL-014
-> **Última revisão:** 2026-09-05
+> **Última revisão:** 2026-09-06
 
 Este documento descreve o modelo de execução autônoma planejado para o Sistema
 MR. Ele serve como referência permanente para a implementação do `AgentRuntime`
@@ -991,3 +991,46 @@ limite técnico de 1.048.576 tokens de entrada e 65.536 de saída. A quota
 operacional observada no AI Studio para o nível gratuito é de 15 RPM, 250.000
 TPM e 500 RPD. Esses valores são limites do projeto e devem continuar
 configuráveis, distintos do orçamento por `AgentRun`.
+
+### 15.6 Gateway local de privacidade e acompanhamento da execução
+
+A BL-019 adiciona o serviço `local-ai-service` como uma fronteira única para
+embeddings, decisão de privacidade, chat/tool calling e interpretação visual.
+O serviço executa localmente em CPU, usando Gemma 3 4B IT quantizado em Q4 para
+as operações generativas. A rota `gemma-local` é registrada no catálogo do
+runtime e o `ModelGatewayRouter` escolhe o gateway local ou o Gemini conforme a
+política de dados; a indisponibilidade do modelo local não provoca envio
+automático para a nuvem.
+
+A política calcula a maior sensibilidade entre os documentos selecionados:
+
+```text
+SENSITIVE | RESTRICTED | UNKNOWN → LOCAL_ONLY
+PERSONAL                    → CLOUD_MINIMIZED
+NORMAL                      → CLOUD_MINIMIZED
+```
+
+`CLOUD_FULL` não é inferido. Ele só pode resultar de uma autorização expressa
+em linguagem natural e, mesmo assim, não é permitido quando o material contém
+sensibilidade diferente de `NORMAL`. O modelo pode interpretar a intenção do
+usuário, mas o backend continua sendo responsável por validar a política,
+selecionar a rota e autorizar qualquer liberação.
+
+Quando o OCR não produz uma representação utilizável, o extrator tenta a visão
+local. Se a visão local não estiver disponível ou não conseguir interpretar o
+material, o documento vai para revisão; não há fallback cloud implícito nesse
+fluxo. Uma futura liberação para cloud multimodal deverá passar por um gateway
+de release auditável compatível com esta política.
+
+O chat público usa execução assíncrona: o `POST /ai/chat` retorna imediatamente
+um `runId` e uma confirmação contextual, enquanto
+`GET /ai/chat/runs/{runId}/events` mantém uma espera longa de até 55 segundos.
+Cada resposta pode carregar a fase atual ou o resultado final. O frontend mostra
+a fase como texto transitório e discreto, preservando a sensação de conversa;
+streaming de tokens permanece fora do MVP.
+
+Nesta primeira versão, o sinal de long polling e o resultado transitório ficam
+em memória no processo da API. O `AgentRun` persistido continua sendo a fonte
+de estado durável, mas a reconstrução completa de uma execução interrompida e
+seus callbacks ainda precisa ser implementada antes de tratar reinício como
+transparente para o usuário.

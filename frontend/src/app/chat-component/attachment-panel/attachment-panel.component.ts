@@ -1,4 +1,4 @@
-import { Component, ElementRef, input, output, ViewChild } from '@angular/core';
+import { Component, ElementRef, input, output, signal, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IChatFile } from '../../../shared/interface/chat_file.interface';
@@ -8,6 +8,7 @@ import { Plus } from '@primeicons/angular/plus';
 import { Refresh } from '@primeicons/angular/refresh';
 import { CloudDownload } from '@primeicons/angular/cloud-download';
 import { Trash } from '@primeicons/angular/trash';
+import { ExclamationTriangle } from '@primeicons/angular/exclamation-triangle';
 
 @Component({
   selector: 'app-attachment-panel',
@@ -21,6 +22,7 @@ import { Trash } from '@primeicons/angular/trash';
     Refresh,
     CloudDownload,
     Trash,
+    ExclamationTriangle,
   ],
   templateUrl: './attachment-panel.component.html',
   styleUrl: './attachment-panel.component.scss',
@@ -41,6 +43,7 @@ export class AttachmentPanelComponent {
   fileDownloaded = output<IChatFile>();
   fileRemoved = output<IChatFile>();
   fileRetried = output<IChatFile>();
+  reviewFile = signal<IChatFile | null>(null);
 
   abrirSeletorDeArquivos(): void {
     if (!this.uploading()) this.fileInput?.nativeElement.click();
@@ -69,6 +72,7 @@ export class AttachmentPanelComponent {
       QUEUED: 'Na fila',
       EXTRACTING: 'Extraindo texto/OCR',
       EMBEDDING: 'Gerando embeddings',
+      NEEDS_REVIEW: 'Revisão necessária',
       READY: 'Pronto',
       FAILED: 'Falhou',
     }[status];
@@ -83,6 +87,14 @@ export class AttachmentPanelComponent {
   }
 
   reprocessarArquivo(file: IChatFile): void {
-    if (file.status === 'FAILED') this.fileRetried.emit(file);
+    if (file.status === 'FAILED' || file.status === 'NEEDS_REVIEW') this.fileRetried.emit(file);
+  }
+
+  abrirRevisao(file: IChatFile): void {
+    this.reviewFile.set(file);
+  }
+
+  fecharRevisao(): void {
+    this.reviewFile.set(null);
   }
 }

@@ -14,6 +14,25 @@ export interface IChatResponse {
   groundingFiles?: IGroundingFile[];
 }
 
+interface IChatStartResponse {
+  runId: string;
+  acknowledgement: string;
+  timestamp: string;
+}
+
+interface IRunEventResponse {
+  runId: string;
+  revision: number;
+  status: string;
+  phase: string;
+  message?: string | null;
+  result?: IChatResponse | null;
+  failureReason?: string | null;
+  terminal: boolean;
+  changed: boolean;
+  timestamp: string;
+}
+
 export interface IChatSubject {
   id: string;
   title: string;
@@ -23,13 +42,15 @@ export interface IChatSubject {
 
 @Injectable({ providedIn: 'root' })
 export class AiChatService {
-  private readonly urlBase = '/api/ai/chat';
+  private readonly urlBase = '/ai/chat';
 
   public messages = signal<IChatMessage[]>([]);
   public loading = signal<boolean>(false);
+  public processingMessage = signal<string | null>(null);
   public files = signal<IChatFile[]>([]);
   public uploading = signal<boolean>(false);
   public uploadError = signal<string | null>(null);
+  private readonly finishedRuns = new Set<string>();
 
   constructor(private readonly http: HttpClient) {}
 
@@ -62,50 +83,102 @@ export class AiChatService {
     // Payload enviado ao back-end
     const payload = { prompt, attachmentIds, includeRelatedFiles, subjectId };
 
+    this.http.post<IChatStartResponse>(this.urlBase, payload).subscribe({
+      next: (res) => {
+        const acknowledgement: IChatMessage = {
+          messageType: 'ASSISTANT',
+          messageId: `ack-${res.runId}`,
+          content: res.acknowledgement,
+          timestamp: res.timestamp,
+        };
+        this.messages.update((list) => [...list, acknowledgement]);
+        this.processingMessage.set('Estou preparando a próxima etapa…');
+        this.pollRun(res.runId, 0, userMsg);
+      },
+      error: (err) => {
+        this.handleInitialError(err, userMsg);
+      },
+    });
+  }
+
+  private pollRun(runId: string, after: number, userMsg: IChatMessage): void {
     this.http
-      .post<IChatResponse>(this.urlBase, payload)
-      .pipe(finalize(() => this.loading.set(false)))
+      .get<IRunEventResponse>(`${this.urlBase}/runs/${runId}/events`, {
+        params: { after, wait: 55 },
+      })
       .subscribe({
-        next: (res) => {
-          // Sucesso: adiciona a resposta da IA com o timestamp devolvido pelo back-end
-          this.messages.update((list) =>
-            list.map((message) =>
-              message === userMsg
-                ? {
-                    ...message,
-                    messageId: res.userMessageId,
-                    interactionId: res.interactionId,
-                  }
-                : message,
-            ),
-          );
-          const aiMsg: IChatMessage = {
-            messageType: 'ASSISTANT',
-            messageId: res.assistantMessageId,
-            interactionId: res.interactionId,
-            content: res.content,
-            timestamp: res.timestamp,
-            groundingFiles: res.groundingFiles ?? [],
-          };
-          this.messages.update((list) => [...list, aiMsg]);
+        next: (event) => {
+          if (event.message && event.status !== 'COMPLETED' && event.status !== 'FAILED') {
+            this.processingMessage.set(event.message);
+          }
+
+          if (event.result && !this.finishedRuns.has(runId)) {
+            this.finishedRuns.add(runId);
+            this.appendResult(event.result, userMsg);
+          }
+
+          if (event.terminal || event.status === 'WAITING_FOR_USER') {
+            this.loading.set(false);
+            this.processingMessage.set(null);
+            if (event.status === 'FAILED' && !event.result) {
+              this.appendFailure(event.failureReason ?? event.message);
+            }
+            return;
+          }
+
+          this.pollRun(runId, event.revision, userMsg);
         },
         error: (err) => {
-          console.error('Erro no envio:', err);
-
-          // Remove a mensagem do usuário que falhou para que ele não tente "Tente de novo" sem contexto
-          userMsg.notValid = true;
-
-          // Adiciona um aviso amigável explicando que a mensagem não foi gravada
-          const errorMsg: IChatMessage = {
-            messageType: 'ASSISTANT',
-            content: err?.error?.message
-              ? `⚠️ ${err.error.message}`
-              : '⚠️ Ocorreu um erro ao processar sua pergunta. Como ela não foi registrada no histórico, por favor, envie o prompt novamente por extenso.',
-            timestamp: new Date().toISOString(),
-          };
-          this.messages.update((list) => [...list, errorMsg]);
+          this.loading.set(false);
+          this.processingMessage.set(null);
+          this.appendFailure(err?.error?.message ?? 'A espera pela execução foi interrompida.');
         },
       });
+  }
+
+  private appendResult(result: IChatResponse, userMsg: IChatMessage): void {
+    this.messages.update((list) =>
+      list.map((message) =>
+        message === userMsg
+          ? {
+              ...message,
+              messageId: result.userMessageId,
+              interactionId: result.interactionId,
+            }
+          : message,
+      ),
+    );
+    this.messages.update((list) => [
+      ...list,
+      {
+        messageType: 'ASSISTANT',
+        messageId: result.assistantMessageId,
+        interactionId: result.interactionId,
+        content: result.content,
+        timestamp: result.timestamp,
+        groundingFiles: result.groundingFiles ?? [],
+      },
+    ]);
+  }
+
+  private handleInitialError(err: { error?: { message?: string } }, userMsg: IChatMessage): void {
+    this.loading.set(false);
+    this.processingMessage.set(null);
+    userMsg.notValid = true;
+    this.appendFailure(
+      err?.error?.message ?? 'Não foi possível iniciar a execução. Envie a mensagem novamente.',
+    );
+  }
+
+  private appendFailure(message: string | null | undefined): void {
+    this.messages.update((list) => [
+      ...list,
+      {
+        messageType: 'ASSISTANT',
+        content: `⚠️ ${message ?? 'Não foi possível concluir esta execução.'}`,
+        timestamp: new Date().toISOString(),
+      },
+    ]);
   }
 
   public carregarHistorico(): void {
@@ -176,9 +249,7 @@ export class AiChatService {
   public reprocessarArquivo(id: string): void {
     this.http.post<IChatFile>(`${this.urlBase}/files/${id}/retry`, {}).subscribe({
       next: (updatedFile) => {
-        this.files.update((files) =>
-          files.map((file) => (file.id === id ? updatedFile : file))
-        );
+        this.files.update((files) => files.map((file) => (file.id === id ? updatedFile : file)));
       },
       error: (err) => console.error('Erro ao reprocessar arquivo', err),
     });

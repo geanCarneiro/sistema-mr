@@ -132,15 +132,39 @@ button {
     border: 1px solid #404040;
   }
 
-  &.loading {
-    color: #aaa;
-    font-style: italic;
-  }
-
   &.invalid {
     border: 1px dashed #ef4444;
     opacity: 0.65;
     text-decoration: line-through;
+  }
+}
+
+.chat-processing {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  color: #999;
+  font-size: 0.82rem;
+  animation: processing-fade 1.4s ease-in-out infinite;
+}
+
+.processing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7db7d8;
+}
+
+@keyframes processing-fade {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
   }
 }
 

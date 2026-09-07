@@ -44,7 +44,7 @@ public class AuthController {
         this.jwtEncoder = jwtEncoder;
     }
         
-    @PostMapping("/api/v1/auth/google")
+    @PostMapping("/v1/auth/google")
     public ResponseEntity<String> authenticate(
             @RequestBody String idToken
     ) {

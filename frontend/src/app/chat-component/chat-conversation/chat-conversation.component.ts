@@ -32,6 +32,7 @@ export class ChatConversationComponent implements AfterViewChecked {
 
   messages = input.required<IChatMessage[]>();
   loading = input(false);
+  processingMessage = input<string | null>(null);
   userName = input<string | null>(null);
   subjects = input<IChatSubject[]>([]);
   activeSubjectId = input<string | null>(null);

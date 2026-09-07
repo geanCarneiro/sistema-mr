@@ -20,6 +20,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   messages: WritableSignal<IChatMessage[]>;
   loading: WritableSignal<boolean>;
+  processingMessage: WritableSignal<string | null>;
   files: WritableSignal<IChatFile[]>;
   uploading: WritableSignal<boolean>;
   uploadError: WritableSignal<string | null>;
@@ -37,6 +38,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   ) {
     this.messages = this.aiChatService.messages;
     this.loading = this.aiChatService.loading;
+    this.processingMessage = this.aiChatService.processingMessage ?? signal(null);
     this.files = this.aiChatService.files;
     this.uploading = this.aiChatService.uploading;
     this.uploadError = this.aiChatService.uploadError;
@@ -137,7 +139,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   reprocessarArquivo(file: IChatFile): void {
-    if (file.status === 'FAILED') {
+    if (file.status === 'FAILED' || file.status === 'NEEDS_REVIEW') {
       this.aiChatService.reprocessarArquivo(file.id);
     }
   }

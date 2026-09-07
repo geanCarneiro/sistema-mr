@@ -24,7 +24,7 @@ export class AuthService {
   ) {}
 
   public doLogin(idToken: string): void {
-    this.http.post('/api/v1/auth/google', idToken, { responseType: 'text' }).subscribe({
+    this.http.post('/v1/auth/google', idToken, { responseType: 'text' }).subscribe({
       next: (res) => {
         this.loading.set(false);
 

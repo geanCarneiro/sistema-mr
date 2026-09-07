@@ -7,4 +7,8 @@ public record DataConstraints(
     public static DataConstraints unspecified() {
         return new DataConstraints("UNSPECIFIED", "agent-run");
     }
+
+    public boolean localOnly() {
+        return "LOCAL_ONLY".equals(mode);
+    }
 }

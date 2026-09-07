@@ -4,6 +4,7 @@ import br.com.geangc.sistema_mr.configuration.DocumentProperties;
 import br.com.geangc.sistema_mr.model.ChatFile;
 import br.com.geangc.sistema_mr.model.DocumentChunk;
 import br.com.geangc.sistema_mr.model.DocumentStatus;
+import br.com.geangc.sistema_mr.model.DocumentSensitivity;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.Collection;
@@ -71,6 +72,7 @@ public class DocumentRepository {
                     status: $status,
                     contextTokenCount: 0,
                     embeddingModel: $embeddingModel,
+                    sensitivity: $sensitivity,
                     createdAt: $createdAt,
                     updatedAt: $updatedAt
                 })
@@ -89,6 +91,7 @@ public class DocumentRepository {
         parameters.put("originalStorageKey", file.originalStorageKey());
         parameters.put("status", file.status().name());
         parameters.put("embeddingModel", file.embeddingModel());
+        parameters.put("sensitivity", file.sensitivity().name());
         parameters.put("createdAt", file.createdAt().toString());
         parameters.put("updatedAt", file.updatedAt().toString());
 
@@ -145,6 +148,36 @@ public class DocumentRepository {
         }
     }
 
+    public List<ChatFile> findLegacyPrivacyFiles() {
+        String query = """
+                MATCH (file:Arquivo)
+                WHERE file.status = 'READY'
+                  AND file.mappingStorageKey IS NULL
+                  AND file.contextStorageKey IS NOT NULL
+                  AND file.deletedAt IS NULL
+                RETURN file
+                ORDER BY file.createdAt
+                """;
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(query)
+                    .list(record -> mapFile(record, "file")));
+        }
+    }
+
+    public void clearChunksForReprocessing(UUID id) {
+        String query = """
+                MATCH (file:Arquivo {id: $id})
+                WHERE file.deletedAt IS NULL
+                OPTIONAL MATCH (file)-[:CONTEM]->(chunk:Chunk)
+                DETACH DELETE chunk
+                """;
+        try (var session = driver.session()) {
+            session.executeWriteWithoutResult(transaction -> transaction.run(query, Map.of(
+                    "id", id.toString()
+            )).consume());
+        }
+    }
+
     public boolean hasReadyFiles(String conversationId, String ownerSubject) {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
@@ -188,14 +221,17 @@ public class DocumentRepository {
     public Optional<ChatFile> resetForRetry(UUID id, String conversationId, String ownerSubject) {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
-                      -[:POSSUI]->(file:Arquivo {id: $id, status: 'FAILED'})
+                      -[:POSSUI]->(file:Arquivo {id: $id})
                 WHERE file.deletedAt IS NULL
+                  AND file.status IN ['FAILED', 'NEEDS_REVIEW']
                 OPTIONAL MATCH (file)-[:CONTEM]->(chunk:Chunk)
                 DETACH DELETE chunk
                 WITH file
                 SET file.status = 'QUEUED',
                     file.errorMessage = null,
                     file.contextStorageKey = null,
+                    file.fullContextStorageKey = null,
+                    file.mappingStorageKey = null,
                     file.updatedAt = $updatedAt
                 RETURN file
                 """;
@@ -236,9 +272,12 @@ public class DocumentRepository {
     public void markReady(
             UUID id,
             String contextStorageKey,
+            String fullContextStorageKey,
+            String mappingStorageKey,
             String extractionMethod,
             String extractionWarnings,
             int contextTokenCount,
+            DocumentSensitivity sensitivity,
             List<DocumentChunk> chunks
     ) {
         String query = """
@@ -248,9 +287,12 @@ public class DocumentRepository {
                 DETACH DELETE oldChunk
                 WITH file
                 SET file.contextStorageKey = $contextStorageKey,
+                    file.fullContextStorageKey = $fullContextStorageKey,
+                    file.mappingStorageKey = $mappingStorageKey,
                     file.extractionMethod = $extractionMethod,
                     file.extractionWarnings = $extractionWarnings,
                     file.contextTokenCount = $contextTokenCount,
+                    file.sensitivity = $sensitivity,
                     file.status = 'READY',
                     file.errorMessage = null,
                     file.updatedAt = $updatedAt
@@ -276,9 +318,12 @@ public class DocumentRepository {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("id", id.toString());
         parameters.put("contextStorageKey", contextStorageKey);
+        parameters.put("fullContextStorageKey", fullContextStorageKey);
+        parameters.put("mappingStorageKey", mappingStorageKey);
         parameters.put("extractionMethod", extractionMethod);
         parameters.put("extractionWarnings", extractionWarnings);
         parameters.put("contextTokenCount", contextTokenCount);
+        parameters.put("sensitivity", sensitivity == null ? DocumentSensitivity.UNKNOWN.name() : sensitivity.name());
         parameters.put("updatedAt", Instant.now().toString());
         parameters.put("embeddingModel", properties.embeddingModel());
         parameters.put("chunks", chunkParameters);
@@ -345,6 +390,8 @@ public class DocumentRepository {
                 WITH file
                 SET file.deletedAt = $deletedAt,
                     file.contextStorageKey = null,
+                    file.fullContextStorageKey = null,
+                    file.mappingStorageKey = null,
                     file.updatedAt = $updatedAt
         """;
         try (var session = driver.session()) {
@@ -392,12 +439,15 @@ public class DocumentRepository {
                 string(values, "sha256"),
                 string(values, "originalStorageKey"),
                 nullableString(values, "contextStorageKey"),
+                nullableString(values, "fullContextStorageKey"),
+                nullableString(values, "mappingStorageKey"),
                 DocumentStatus.valueOf(string(values, "status")),
                 nullableString(values, "errorMessage"),
                 number(values, "contextTokenCount").intValue(),
                 nullableString(values, "embeddingModel"),
                 Instant.parse(string(values, "createdAt")),
-                Instant.parse(string(values, "updatedAt"))
+                Instant.parse(string(values, "updatedAt")),
+                sensitivity(values)
         );
     }
 
@@ -413,6 +463,11 @@ public class DocumentRepository {
     private static Number number(Map<String, Object> values, String key) {
         Object value = values.get(key);
         return value instanceof Number number ? number : 0;
+    }
+
+    private static DocumentSensitivity sensitivity(Map<String, Object> values) {
+        String value = nullableString(values, "sensitivity");
+        return value == null || value.isBlank() ? DocumentSensitivity.UNKNOWN : DocumentSensitivity.valueOf(value);
     }
 
     public record GroundingMatch(ChatFile file, double score) {}

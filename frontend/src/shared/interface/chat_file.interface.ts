@@ -1,4 +1,7 @@
-export type ChatFileStatus = 'QUEUED' | 'EXTRACTING' | 'EMBEDDING' | 'READY' | 'FAILED';
+export type ChatFileStatus =
+  'QUEUED' | 'EXTRACTING' | 'EMBEDDING' | 'NEEDS_REVIEW' | 'READY' | 'FAILED';
+
+export type ChatFileSensitivity = 'NORMAL' | 'PERSONAL' | 'SENSITIVE' | 'RESTRICTED' | 'UNKNOWN';
 
 export interface IChatFile {
   id: string;
@@ -8,6 +11,7 @@ export interface IChatFile {
   status: ChatFileStatus;
   errorMessage?: string | null;
   contextTokenCount: number;
+  sensitivity?: ChatFileSensitivity;
   createdAt: string;
   updatedAt: string;
 }

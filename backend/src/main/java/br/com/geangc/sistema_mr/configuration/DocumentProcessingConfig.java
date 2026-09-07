@@ -11,8 +11,10 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @EnableAsync
 @EnableConfigurationProperties({
         DocumentProperties.class,
+        DocumentPrivacyProperties.class,
         DocumentVisionProperties.class,
-        AgentRuntimeProperties.class
+        AgentRuntimeProperties.class,
+        LocalAiProperties.class
 })
 public class DocumentProcessingConfig {
 
@@ -23,6 +25,17 @@ public class DocumentProcessingConfig {
         executor.setMaxPoolSize(1);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("document-processing-");
+        executor.initialize();
+        return executor;
+    }
+
+    @Bean("agentTaskExecutor")
+    public Executor agentTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("agent-processing-");
         executor.initialize();
         return executor;
     }

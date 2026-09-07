@@ -19,5 +19,6 @@ public class DocumentProcessingRecovery implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         repository.findPending().forEach(file -> ingestionService.process(file.id()));
+        repository.findLegacyPrivacyFiles().forEach(file -> ingestionService.process(file.id()));
     }
 }

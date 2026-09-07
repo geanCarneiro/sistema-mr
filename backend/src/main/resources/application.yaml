@@ -14,11 +14,6 @@ spring:
     google:
       genai:
         api-key: ${GEMINI_API_KEY}
-        embedding:
-          api-key: ${GEMINI_API_KEY}
-          text:
-            model: gemini-embedding-2
-            dimensions: 768
         chat:
           model: gemini-3.1-flash-lite
           temperature: 0.3
@@ -88,11 +83,29 @@ app:
             requests-per-minute: 15
             input-tokens-per-minute: 250000
             requests-per-day: 500
+        - id: gemma-local
+          provider: local-ai
+          model: gemma-3-4b-it-q4
+          enabled: true
+          input-token-limit: 8192
+          output-token-limit: 2048
+          capabilities:
+            function-calling: true
+            structured-output: true
+            thinking: false
+          quota: {}
     document-vision:
       model: gemini-3.1-flash-lite
       temperature: 0.0
       thinking-level: LOW
       max-output-tokens: 8192
+    local:
+      service-url: ${LOCAL_AI_SERVICE_URL:http://127.0.0.1:8083}
+      model: ${LOCAL_AI_CHAT_MODEL:gemma-3-4b-it-q4}
+      connect-timeout-seconds: 2
+      read-timeout-seconds: 90
+      decision-max-tokens: 256
+      vision-max-tokens: 2048
   documents:
     storage-root: ${FILE_STORAGE_ROOT:./data/files}
     max-files-per-upload: 10
@@ -100,8 +113,9 @@ app:
     chunk-size: 800
     max-chunks: 1000
     embedding-batch-size: 20
-    embedding-model: gemini-embedding-2
-    embedding-dimensions: 768
+    embedding-model: multilingual-e5-small
+    embedding-dimensions: 384
+    embedding-service-url: ${DOCUMENT_EMBEDDING_SERVICE_URL:http://127.0.0.1:8083}
     retrieval-candidates: 100
     retrieval-file-limit: 3
     similarity-threshold: 0.60
@@ -111,3 +125,5 @@ app:
       timeout-seconds: 120
       minimum-text-characters: 12
       minimum-mean-confidence: 0.55
+    privacy:
+      mapping-encryption-key: ${DOCUMENT_MAPPING_ENCRYPTION_KEY}

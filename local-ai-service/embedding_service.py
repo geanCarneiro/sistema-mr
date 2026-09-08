@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
@@ -18,6 +19,7 @@ DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 MAX_TEXTS = int(os.getenv("EMBEDDING_MAX_TEXTS", "20"))
 MAX_TEXT_LENGTH = int(os.getenv("EMBEDDING_MAX_TEXT_LENGTH", "12000"))
 MAX_REQUEST_BYTES = int(os.getenv("EMBEDDING_MAX_REQUEST_BYTES", str(2 * 1024 * 1024)))
+MAX_BINARY_REQUEST_BYTES = int(os.getenv("LOCAL_AI_BINARY_MAX_REQUEST_BYTES", str(64 * 1024 * 1024)))
 CHAT_MODEL_PATH = os.getenv("LOCAL_CHAT_MODEL_PATH", "/models/gemma-3-4b-it-q4_0.gguf")
 CHAT_MODEL_NAME = os.getenv("LOCAL_CHAT_MODEL_NAME", "gemma-3-4b-it-q4")
 CHAT_CONTEXT_SIZE = int(os.getenv("LOCAL_CHAT_CONTEXT_SIZE", "8192"))
@@ -258,10 +260,44 @@ class EmbeddingRequestHandler(BaseHTTPRequestHandler):
         if self.path not in {"/embed", "/chat", "/decision", "/vision"}:
             self._write_json(HTTPStatus.NOT_FOUND, {"message": "Endpoint não encontrado"})
             return
-        length = self._request_length()
+        content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        length = self._request_length(
+            MAX_BINARY_REQUEST_BYTES
+            if self.path == "/vision" and content_type != "application/json"
+            else MAX_REQUEST_BYTES
+        )
         if length is None:
             return
         try:
+            if self.path == "/vision" and content_type != "application/json":
+                mime_type = content_type
+                prompt = self.headers.get("X-Prompt", "").strip()
+                if not mime_type or not prompt:
+                    raise ValueError("Content-Type e X-Prompt são obrigatórios")
+                try:
+                    max_tokens = int(self.headers.get("X-Max-Tokens", "2048"))
+                except ValueError as exception:
+                    raise ValueError("X-Max-Tokens deve ser numérico") from exception
+                content_base64 = base64.b64encode(self.rfile.read(length)).decode("ascii")
+                if not content_base64:
+                    raise ValueError("O arquivo está vazio")
+                image_message = {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {
+                            "url": f"data:{mime_type};base64,{content_base64}"
+                        }},
+                    ],
+                }
+                raw = first_message_content(run_chat(
+                    [{"role": "system", "content": "Descreva fielmente a imagem e transcreva seu texto."}, image_message],
+                    0.1,
+                    max_tokens,
+                ))
+                self._write_json(HTTPStatus.OK, {"model": CHAT_MODEL_NAME, "content": raw.get("content", "")})
+                return
+
             payload = json.loads(self.rfile.read(length))
             if not isinstance(payload, dict):
                 raise ValueError("O corpo deve ser um objeto JSON")
@@ -326,7 +362,7 @@ class EmbeddingRequestHandler(BaseHTTPRequestHandler):
             LOGGER.exception("Falha durante a inferência de embeddings")
             self._write_json(HTTPStatus.UNPROCESSABLE_ENTITY, {"message": "Falha na inferência local"})
 
-    def _request_length(self) -> int | None:
+    def _request_length(self, limit: int = MAX_REQUEST_BYTES) -> int | None:
         try:
             length = int(self.headers.get("Content-Length", ""))
         except ValueError:
@@ -335,7 +371,7 @@ class EmbeddingRequestHandler(BaseHTTPRequestHandler):
         if length <= 0:
             self._write_json(HTTPStatus.LENGTH_REQUIRED, {"message": "Corpo da requisição ausente"})
             return None
-        if length > MAX_REQUEST_BYTES:
+        if length > limit:
             self._write_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"message": "A requisição excede o limite permitido"})
             return None
         return length

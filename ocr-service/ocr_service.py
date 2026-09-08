@@ -21,7 +21,7 @@ PORT = int(os.getenv("OCR_SERVICE_PORT", "8082"))
 MODEL = os.getenv("PADDLEOCR_MODEL", "PP-OCRv6_medium")
 ENGINE = os.getenv("PADDLEOCR_ENGINE", "onnxruntime")
 MAX_FILE_BYTES = int(os.getenv("OCR_MAX_FILE_BYTES", str(20 * 1024 * 1024)))
-MAX_REQUEST_BYTES = int(os.getenv("OCR_MAX_REQUEST_BYTES", str(32 * 1024 * 1024)))
+MAX_REQUEST_BYTES = int(os.getenv("OCR_MAX_REQUEST_BYTES", str(64 * 1024 * 1024)))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 LOGGER = logging.getLogger("ocr-service")
@@ -144,14 +144,21 @@ class OcrRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            payload = json.loads(self.rfile.read(request_length))
-            encoded = payload.get("contentBase64") if isinstance(payload, dict) else None
-            mime_type = payload.get("mimeType") if isinstance(payload, dict) else None
-            if not isinstance(encoded, str) or not encoded:
-                raise ValueError("contentBase64 é obrigatório")
-            if not isinstance(mime_type, str) or not mime_type:
-                raise ValueError("mimeType é obrigatório")
-            content = base64.b64decode(encoded, validate=True)
+            content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if content_type == "application/json":
+                payload = json.loads(self.rfile.read(request_length))
+                encoded = payload.get("contentBase64") if isinstance(payload, dict) else None
+                mime_type = payload.get("mimeType") if isinstance(payload, dict) else None
+                if not isinstance(encoded, str) or not encoded:
+                    raise ValueError("contentBase64 é obrigatório")
+                if not isinstance(mime_type, str) or not mime_type:
+                    raise ValueError("mimeType é obrigatório")
+                content = base64.b64decode(encoded, validate=True)
+            else:
+                mime_type = content_type
+                if not mime_type:
+                    raise ValueError("Content-Type é obrigatório")
+                content = self.rfile.read(request_length)
             if not content:
                 raise ValueError("O arquivo está vazio")
             if len(content) > MAX_FILE_BYTES:

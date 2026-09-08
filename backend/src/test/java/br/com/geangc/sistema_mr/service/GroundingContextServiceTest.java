@@ -9,12 +9,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 
 import br.com.geangc.sistema_mr.configuration.DocumentProperties;
 import br.com.geangc.sistema_mr.model.ChatFile;
+import br.com.geangc.sistema_mr.model.DocumentSensitivity;
 import br.com.geangc.sistema_mr.model.DocumentStatus;
 import br.com.geangc.sistema_mr.repository.DocumentRepository;
-import br.com.geangc.sistema_mr.repository.DocumentRepository.GroundingMatch;
+import br.com.geangc.sistema_mr.repository.DocumentRepository.GroundingChunkMatch;
 import br.com.geangc.sistema_mr.storage.DocumentStorage;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -61,8 +64,8 @@ class GroundingContextServiceTest {
                 .thenReturn(List.of(explicit));
         when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
         when(embeddings.embedQuery("Compare")).thenReturn(embedding);
-        when(repository.searchReadyFiles("chat-owner", "owner", embedding))
-                .thenReturn(List.of(new GroundingMatch(related, .91)));
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding))
+                .thenReturn(List.of(new GroundingChunkMatch(related, UUID.randomUUID(), 0, "ADITIVO", .91)));
         when(storage.readText("explicit-context")).thenReturn("CONTRATO");
         when(storage.readText("related-context")).thenReturn("ADITIVO");
 
@@ -88,8 +91,8 @@ class GroundingContextServiceTest {
         when(repository.findReadyOwnedByIds(List.of(), "chat-owner", "owner")).thenReturn(List.of());
         when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
         when(embeddings.embedQuery("Como configurar?")).thenReturn(embedding);
-        when(repository.searchReadyFiles("chat-owner", "owner", embedding))
-                .thenReturn(List.of(new GroundingMatch(related, .84)));
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding))
+                .thenReturn(List.of(new GroundingChunkMatch(related, UUID.randomUUID(), 0, "MANUAL", .84)));
         when(storage.readText("related-context")).thenReturn("MANUAL");
 
         var service = new GroundingContextService(repository, storage, embeddings, properties(200_000));
@@ -120,16 +123,174 @@ class GroundingContextServiceTest {
     @Test
     void rejectsExplicitAttachmentsThatExceedTheContextBudget() {
         DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
         UUID id = UUID.randomUUID();
-        when(repository.findReadyOwnedByIds(List.of(id), "chat-owner", "owner"))
-                .thenReturn(List.of(readyFile(id, "relatório.pdf", "context-key", 101)));
+        ChatFile file = readyFile(id, "relatório.pdf", "context-key", 101);
+        when(repository.findReadyOwnedByIds(List.of(id), "chat-owner", "owner")).thenReturn(List.of(file));
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Pergunta")).thenReturn(List.of(.1f, .2f));
+        when(embeddings.estimateTokens("evidência")).thenReturn(2);
+        when(repository.searchReadyChunks("chat-owner", "owner", List.of(.1f, .2f)))
+                .thenReturn(List.of(new GroundingChunkMatch(file, UUID.randomUUID(), 0, "evidência", .9)));
 
         var service = new GroundingContextService(
-                repository, mock(DocumentStorage.class), mock(DocumentEmbeddingService.class), properties(100)
+                repository, mock(DocumentStorage.class), embeddings, properties(100)
         );
 
         assertThrows(GroundingContextLimitException.class,
                 () -> service.prepare("chat-owner", "owner", "Pergunta", List.of(id), false));
+    }
+
+    @Test
+    void stopsWithNoEvidenceWhenExplicitAttachmentHasNoRelevantChunks() {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        UUID id = UUID.randomUUID();
+        ChatFile file = readyFile(id, "manual.md", "context-key", 20_000);
+        when(repository.findReadyOwnedByIds(List.of(id), "chat-owner", "owner")).thenReturn(List.of(file));
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Pergunta sem resposta")).thenReturn(List.of(.1f, .2f));
+        when(repository.searchReadyChunks("chat-owner", "owner", List.of(.1f, .2f))).thenReturn(List.of());
+
+        var service = new GroundingContextService(
+                repository, mock(DocumentStorage.class), embeddings, properties(200_000)
+        );
+
+        GroundingEvidenceInsufficientException exception = assertThrows(
+                GroundingEvidenceInsufficientException.class,
+                () -> service.prepare("chat-owner", "owner", "Pergunta sem resposta", List.of(id), false));
+
+        assertEquals("O anexo selecionado não retornou evidências relevantes para a solicitação.", exception.getMessage());
+    }
+
+    @Test
+    void recordsEvidenceSufficientAsTheProgressiveRetrievalStopReason() throws Exception {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentStorage storage = mock(DocumentStorage.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        UUID fileId = UUID.randomUUID();
+        ChatFile large = readyFile(fileId, "manual-grande.md", "large-context", 20_000);
+        List<Float> embedding = List.of(.7f, .8f);
+        GroundingChunkMatch anchor = new GroundingChunkMatch(large, UUID.randomUUID(), 12, "TRECHO", .95);
+
+        when(repository.findReadyOwnedByIds(List.of(fileId), "chat-owner", "owner")).thenReturn(List.of(large));
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Localize o trecho")).thenReturn(embedding);
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding)).thenReturn(List.of(anchor));
+
+        var service = new GroundingContextService(repository, storage, embeddings, properties(200_000));
+        var prepared = service.prepare("chat-owner", "owner", "Localize o trecho", List.of(fileId), false);
+
+        assertEquals(GroundingContextService.RetrievalStopReason.EVIDENCE_SUFFICIENT,
+                prepared.retrievalStopReason());
+    }
+
+    @Test
+    void recordsNoEvidenceFoundWhenAutomaticSearchReturnsNoChunks() {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        List<Float> embedding = List.of(.1f, .2f);
+        when(repository.findReadyOwnedByIds(List.of(), "chat-owner", "owner")).thenReturn(List.of());
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Pergunta sem evidência")).thenReturn(embedding);
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding)).thenReturn(List.of());
+
+        var service = new GroundingContextService(
+                repository, mock(DocumentStorage.class), embeddings, properties(200_000)
+        );
+        var prepared = service.prepare(
+                "chat-owner", "owner", "Pergunta sem evidência", List.of(), false);
+
+        assertEquals(GroundingContextService.RetrievalStopReason.NO_EVIDENCE_FOUND,
+                prepared.retrievalStopReason());
+        assertTrue(prepared.evidences().isEmpty());
+    }
+
+    @Test
+    void usesRelevantChunksAndNeighborsForLargeRelatedDocuments() throws Exception {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentStorage storage = mock(DocumentStorage.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        UUID fileId = UUID.randomUUID();
+        ChatFile large = readyFile(fileId, "manual-grande.pdf", "large-context", 20_000);
+        List<Float> embedding = List.of(.5f, .6f);
+        GroundingChunkMatch anchor = new GroundingChunkMatch(large, fileId, 40, "TRECHO CENTRAL", .93);
+        GroundingChunkMatch previous = new GroundingChunkMatch(large, UUID.randomUUID(), 39, "CABEÇALHO DA SEÇÃO", .93);
+        GroundingChunkMatch next = new GroundingChunkMatch(large, UUID.randomUUID(), 41, "EXCEÇÃO DA SEÇÃO", .93);
+
+        when(repository.findReadyOwnedByIds(List.of(), "chat-owner", "owner")).thenReturn(List.of());
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Qual é a exceção?")).thenReturn(embedding);
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding)).thenReturn(List.of(anchor));
+        when(repository.findChunksAround(eq("chat-owner"), eq("owner"), anyList(), eq(1)))
+                .thenReturn(List.of(previous, anchor, next));
+
+        var service = new GroundingContextService(repository, storage, embeddings, properties(200_000));
+        var prepared = service.prepare("chat-owner", "owner", "Qual é a exceção?", List.of(), false);
+
+        assertEquals(1, prepared.files().size());
+        assertEquals(3, prepared.evidences().size());
+        assertTrue(prepared.modelPrompt().contains("CABEÇALHO DA SEÇÃO"));
+        assertTrue(prepared.modelPrompt().contains("EXCEÇÃO DA SEÇÃO"));
+        verify(storage, never()).readText("large-context");
+    }
+
+    @Test
+    void usesRelevantChunksAndNeighborsForLargeExplicitDocuments() throws Exception {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentStorage storage = mock(DocumentStorage.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        UUID fileId = UUID.randomUUID();
+        ChatFile large = readyFile(fileId, "manual-grande.md", "large-context", 20_000);
+        List<Float> embedding = List.of(.7f, .8f);
+        GroundingChunkMatch anchor = new GroundingChunkMatch(large, UUID.randomUUID(), 12, "TRECHO EXPLÍCITO", .95);
+        GroundingChunkMatch previous = new GroundingChunkMatch(large, UUID.randomUUID(), 11, "CONTEXTO ANTERIOR", .95);
+        GroundingChunkMatch next = new GroundingChunkMatch(large, UUID.randomUUID(), 13, "CONTEXTO POSTERIOR", .95);
+
+        when(repository.findReadyOwnedByIds(List.of(fileId), "chat-owner", "owner"))
+                .thenReturn(List.of(large));
+        when(repository.hasReadyFiles("chat-owner", "owner")).thenReturn(true);
+        when(embeddings.embedQuery("Localize o trecho")).thenReturn(embedding);
+        when(repository.searchReadyChunks("chat-owner", "owner", embedding)).thenReturn(List.of(anchor));
+        when(repository.findChunksAround(eq("chat-owner"), eq("owner"), anyList(), eq(1)))
+                .thenReturn(List.of(previous, anchor, next));
+
+        var service = new GroundingContextService(repository, storage, embeddings, properties(200_000));
+        var prepared = service.prepare("chat-owner", "owner", "Localize o trecho", List.of(fileId), false);
+
+        assertEquals(1, prepared.files().size());
+        assertTrue(prepared.files().getFirst().explicitlyAttached());
+        assertEquals(3, prepared.evidences().size());
+        assertTrue(prepared.modelPrompt().contains("TRECHO EXPLÍCITO"));
+        assertTrue(prepared.modelPrompt().contains("CONTEXTO ANTERIOR"));
+        assertTrue(prepared.modelPrompt().contains("CONTEXTO POSTERIOR"));
+        verify(storage, never()).readText("large-context");
+    }
+
+    @Test
+    void usesCompleteRepresentationOnlyForLocalOnlyDocuments() throws Exception {
+        DocumentRepository repository = mock(DocumentRepository.class);
+        DocumentStorage storage = mock(DocumentStorage.class);
+        DocumentEmbeddingService embeddings = mock(DocumentEmbeddingService.class);
+        UUID id = UUID.randomUUID();
+        Instant now = Instant.now();
+        ChatFile sensitive = new ChatFile(
+                id, "chat-owner", "owner", "dados.pdf", "application/pdf", 10, "hash",
+                id + "/original", "anonymized-context", id + "/full-context", id + "/mapping",
+                DocumentStatus.READY, null, 20, "multilingual-e5-small", now, now,
+                DocumentSensitivity.SENSITIVE
+        );
+        when(repository.findReadyOwnedByIds(List.of(id), "chat-owner", "owner"))
+                .thenReturn(List.of(sensitive));
+        when(storage.readText(id + "/full-context")).thenReturn("DADO COMPLETO");
+
+        var service = new GroundingContextService(repository, storage, embeddings, properties(200_000));
+        var prepared = service.prepare("chat-owner", "owner", "Resuma", List.of(id), false);
+
+        assertEquals(br.com.geangc.sistema_mr.privacy.PrivacyMode.LOCAL_ONLY,
+                prepared.privacyDecision().mode());
+        assertTrue(prepared.modelPrompt().contains("DADO COMPLETO"));
+        verify(storage, never()).readText("anonymized-context");
     }
 
     private static ChatFile readyFile(UUID id, String name, String contextStorageKey, int tokenCount) {

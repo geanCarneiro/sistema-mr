@@ -202,6 +202,36 @@ class AgentRuntimePolicyTest {
         verify(scheduler).enqueue(runId);
     }
 
+    @Test
+    void rejectsContextThatLeavesNoSpaceForTheConfiguredResponse() {
+        UUID runId = UUID.randomUUID();
+        AgentRunRepository repository = mock(AgentRunRepository.class);
+        ModelGateway modelGateway = mock(ModelGateway.class);
+        ToolExecutionPort toolExecutionPort = mock(ToolExecutionPort.class);
+        InMemoryRunScheduler scheduler = mock(InMemoryRunScheduler.class);
+        when(repository.claim(runId, "owner")).thenReturn(true);
+        AgentRuntimeProperties constrained = new AgentRuntimeProperties(
+                "route",
+                new AgentRuntimeProperties.Limits(3, 3, 3, 10, 50, 40),
+                List.of(new AgentRuntimeProperties.Route(
+                        "route", "provider", "model", true, 1000, 100,
+                        new AgentRuntimeProperties.Capabilities(true, true, false),
+                        new AgentRuntimeProperties.Quota(10, 1000, 100))));
+        AgentRuntime runtime = new AgentRuntime(
+                constrained, repository, modelGateway, toolExecutionPort, scheduler,
+                new ToolAutonomyPolicy());
+
+        AgentRunResult result = runtime.execute(new AgentRunCommand(
+                runId, UUID.randomUUID(), "Chat geral", "chat-owner", "owner",
+                AgentRunTrigger.USER_MESSAGE,
+                List.of(new org.springframework.ai.chat.messages.UserMessage("x".repeat(100))),
+                List.of(), DataConstraints.unspecified(), AutonomyLevel.EXECUTE, Set.of()));
+
+        assertEquals(AgentRunStatus.FAILED, result.status());
+        assertEquals("RUN_CONTEXT_LIMIT_EXCEEDED", result.failureReason());
+        verify(modelGateway, never()).invoke(any());
+    }
+
     private static AgentRunCommand command(UUID runId, AgentTool... tools) {
         return command(runId, List.of(tools), AutonomyLevel.EXECUTE);
     }

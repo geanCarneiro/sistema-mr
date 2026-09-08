@@ -6,7 +6,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +17,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -60,12 +60,15 @@ public class LocalModelClient implements LocalModelProvider {
     @Override
     public LocalVision vision(Path path, String mimeType, String prompt) {
         try {
-            Map<String, Object> response = post("/vision", Map.of(
-                    "mimeType", mimeType,
-                    "contentBase64", Base64.getEncoder().encodeToString(Files.readAllBytes(path)),
-                    "prompt", prompt,
-                    "maxTokens", properties.visionMaxTokens()
-            ));
+            Map<String, Object> response = postBinary(
+                    "/vision",
+                    path,
+                    mimeType,
+                    Map.of(
+                            "X-Prompt", prompt,
+                            "X-Max-Tokens", Integer.toString(properties.visionMaxTokens())
+                    )
+            );
             return new LocalVision(text(response.get("content"), ""));
         } catch (IOException exception) {
             throw new IllegalStateException("Não foi possível ler o arquivo para a visão local", exception);
@@ -105,6 +108,33 @@ public class LocalModelClient implements LocalModelProvider {
                     .retrieve()
                     .body(Map.class);
         } catch (JacksonException | RestClientException exception) {
+            throw new ModelCapacityException("O serviço local não está disponível", exception);
+        }
+        if (response == null) {
+            throw new ModelCapacityException("O serviço local não retornou uma resposta", null);
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> typed = (Map<String, Object>) response;
+        return typed;
+    }
+
+    private Map<String, Object> postBinary(
+            String path,
+            Path requestPath,
+            String mimeType,
+            Map<String, String> headers
+    ) throws IOException {
+        Map<?, ?> response;
+        try {
+            long contentLength = Files.size(requestPath);
+            var request = client.post()
+                    .uri(path)
+                    .contentType(MediaType.parseMediaType(mimeType))
+                    .contentLength(contentLength)
+                    .body(new FileSystemResource(requestPath));
+            headers.forEach((name, value) -> request.header(name, value));
+            response = request.retrieve().body(Map.class);
+        } catch (RestClientException | IllegalArgumentException exception) {
             throw new ModelCapacityException("O serviço local não está disponível", exception);
         }
         if (response == null) {

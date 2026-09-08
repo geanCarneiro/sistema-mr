@@ -5,12 +5,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -57,19 +57,15 @@ public class PaddleOcrClient {
 
     public OcrResult extract(Path path, String originalName, String mimeType) throws IOException {
         Health health = health();
-        byte[] content = Files.readAllBytes(path);
-        byte[] requestBody = objectMapper.writeValueAsBytes(new OcrRequest(
-                originalName,
-                mimeType,
-                Base64.getEncoder().encodeToString(content)
-        ));
+        long contentLength = Files.size(path);
 
         try {
             OcrResult response = restClient.post()
                     .uri("/ocr")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .contentLength(requestBody.length)
-                    .body(requestBody)
+                    .contentType(MediaType.parseMediaType(mimeType))
+                    .header("X-Original-Name", originalName)
+                    .contentLength(contentLength)
+                    .body(new FileSystemResource(path))
                     .retrieve()
                     .body(OcrResult.class);
             if (response == null) {
@@ -92,8 +88,6 @@ public class PaddleOcrClient {
     }
 
     public record Health(String status, boolean ready, String model, String engine) {}
-
-    private record OcrRequest(String originalName, String mimeType, String contentBase64) {}
 
     public record OcrResult(
             String model,

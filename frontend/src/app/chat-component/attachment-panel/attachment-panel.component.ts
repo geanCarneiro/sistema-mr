@@ -28,6 +28,10 @@ import { ExclamationTriangle } from '@primeicons/angular/exclamation-triangle';
   styleUrl: './attachment-panel.component.scss',
 })
 export class AttachmentPanelComponent {
+  private readonly tamanhoFormatador = new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 1,
+  });
+
   @ViewChild('fileInput') private fileInput?: ElementRef<HTMLInputElement>;
 
   files = input.required<IChatFile[]>();
@@ -76,6 +80,19 @@ export class AttachmentPanelComponent {
       READY: 'Pronto',
       FAILED: 'Falhou',
     }[status];
+  }
+
+  tamanhoFormatado(bytes: number): string {
+    const unidades = ['B', 'KB', 'MB', 'GB'];
+    let valor = Math.max(0, bytes);
+    let unidade = 0;
+
+    while (valor >= 1024 && unidade < unidades.length - 1) {
+      valor /= 1024;
+      unidade += 1;
+    }
+
+    return `${this.tamanhoFormatador.format(valor)} ${unidades[unidade]}`;
   }
 
   baixarArquivo(file: IChatFile): void {

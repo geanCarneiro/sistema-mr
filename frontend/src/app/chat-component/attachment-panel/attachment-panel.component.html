@@ -73,7 +73,7 @@
         <label class="file-content" [for]="'file-' + file.id">
           <span class="file-name" [title]="file.name">{{ file.name }}</span>
           <span class="file-meta">
-            {{ file.size / 1024 | number: '1.0-1' }} KB ·
+            {{ tamanhoFormatado(file.size) }} ·
             <span
               [class.status-failed]="file.status === 'FAILED'"
               [class.status-needs-review]="file.status === 'NEEDS_REVIEW'"

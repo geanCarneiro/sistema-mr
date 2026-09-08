@@ -3,6 +3,7 @@ package br.com.geangc.sistema_mr.controller;
 import java.time.Instant;
 import java.util.UUID;
 import br.com.geangc.sistema_mr.service.DocumentNotFoundException;
+import br.com.geangc.sistema_mr.service.GroundingEvidenceInsufficientException;
 import br.com.geangc.sistema_mr.service.GroundingContextLimitException;
 import br.com.geangc.sistema_mr.service.SubjectNotFoundException;
 import br.com.geangc.sistema_mr.agent.service.AgentRunUnavailableException;
@@ -52,7 +53,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler(GroundingContextLimitException.class)
     public ResponseEntity<ApiError> handleContextLimit(GroundingContextLimitException exception) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(new ApiError(exception.getMessage(), Instant.now(), null));
+                .body(new ApiError(GroundingContextLimitException.USER_MESSAGE, Instant.now(), null));
+    }
+
+    @ExceptionHandler(GroundingEvidenceInsufficientException.class)
+    public ResponseEntity<ApiError> handleInsufficientEvidence(GroundingEvidenceInsufficientException exception) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(new ApiError(GroundingEvidenceInsufficientException.USER_MESSAGE, Instant.now(), null));
     }
 
     @ExceptionHandler(AgentRunUnavailableException.class)

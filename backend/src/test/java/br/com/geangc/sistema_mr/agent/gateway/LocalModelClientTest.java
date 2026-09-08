@@ -32,7 +32,7 @@ class LocalModelClientTest {
     }
 
     @Test
-    void sendsVisionJsonWithAnExplicitContentLength() throws Exception {
+    void sendsVisionAsBinaryWithContentMetadata() throws Exception {
         AtomicInteger declaredLength = new AtomicInteger();
         AtomicInteger receivedLength = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -40,11 +40,15 @@ class LocalModelClientTest {
             byte[] body = exchange.getRequestBody().readAllBytes();
             declaredLength.set(Integer.parseInt(exchange.getRequestHeaders().getFirst("Content-Length")));
             receivedLength.set(body.length);
+            assertEquals("image/png", exchange.getRequestHeaders().getFirst("Content-Type"));
+            assertEquals("Descreva a imagem", exchange.getRequestHeaders().getFirst("X-Prompt"));
+            assertEquals("256", exchange.getRequestHeaders().getFirst("X-Max-Tokens"));
             respond(exchange, "{\"content\":\"imagem processada\"}");
         });
         server.start();
 
-        Path image = Files.write(temporaryDirectory.resolve("poster.png"), new byte[]{1, 2, 3});
+        byte[] expected = {1, 2, 3};
+        Path image = Files.write(temporaryDirectory.resolve("poster.png"), expected);
         LocalModelClient client = new LocalModelClient(properties(server.getAddress().getPort()), new ObjectMapper());
 
         LocalModelProvider.LocalVision result = client.vision(image, "image/png", "Descreva a imagem");
@@ -52,6 +56,7 @@ class LocalModelClientTest {
         assertEquals("imagem processada", result.content());
         assertTrue(declaredLength.get() > 0);
         assertEquals(declaredLength.get(), receivedLength.get());
+        assertEquals(expected.length, receivedLength.get());
     }
 
     private static void respond(HttpExchange exchange, String json) throws IOException {

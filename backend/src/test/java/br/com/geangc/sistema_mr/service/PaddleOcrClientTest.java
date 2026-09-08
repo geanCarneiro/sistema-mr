@@ -32,7 +32,7 @@ class PaddleOcrClientTest {
     }
 
     @Test
-    void sendsJsonWithAnExplicitContentLength() throws Exception {
+    void sendsFileAsBinaryWithContentMetadata() throws Exception {
         AtomicInteger declaredLength = new AtomicInteger();
         AtomicInteger receivedLength = new AtomicInteger();
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -44,6 +44,8 @@ class PaddleOcrClientTest {
             byte[] body = exchange.getRequestBody().readAllBytes();
             declaredLength.set(Integer.parseInt(exchange.getRequestHeaders().getFirst("Content-Length")));
             receivedLength.set(body.length);
+            assertEquals("image/png", exchange.getRequestHeaders().getFirst("Content-Type"));
+            assertEquals("poster.png", exchange.getRequestHeaders().getFirst("X-Original-Name"));
             respond(exchange, "{\"model\":\"PP-OCRv6_medium\",\"lines\":[],\"meanConfidence\":0.0,\"durationMs\":1}");
         });
         server.start();
@@ -56,6 +58,7 @@ class PaddleOcrClientTest {
         assertEquals("PP-OCRv6_medium", result.model());
         assertTrue(declaredLength.get() > 0);
         assertEquals(declaredLength.get(), receivedLength.get());
+        assertEquals(3, receivedLength.get());
     }
 
     private static void respond(HttpExchange exchange, String json) throws IOException {

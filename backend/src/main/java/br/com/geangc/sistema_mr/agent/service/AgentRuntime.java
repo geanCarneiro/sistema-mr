@@ -33,6 +33,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -140,6 +141,10 @@ public class AgentRuntime {
                 String routeId = localOnly
                         ? properties.localRouteConfig().id()
                         : properties.defaultRouteConfig().id();
+                AgentRuntimeProperties.Route route = route(routeId);
+                if (!fitsContextBudget(conversation, command.tools(), route)) {
+                    return fail(run, "RUN_CONTEXT_LIMIT_EXCEEDED");
+                }
                 ModelRequest request = new ModelRequest(
                         run.id(),
                         routeId,
@@ -316,7 +321,45 @@ public class AgentRuntime {
         context.put("subjectId", command.subjectId().toString());
         context.put("conversationId", command.conversationId());
         context.put("ownerSubject", command.ownerSubject());
+        context.put("privacyMode", command.dataConstraints().mode());
+        context.put("purpose", command.dataConstraints().purpose());
         return context;
+    }
+
+    private AgentRuntimeProperties.Route route(String routeId) {
+        return properties.routes().stream()
+                .filter(route -> route.enabled() && route.id().equals(routeId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("A rota de modelo não foi encontrada: " + routeId));
+    }
+
+    private boolean fitsContextBudget(
+            List<Message> conversation,
+            List<AgentTool> tools,
+            AgentRuntimeProperties.Route route
+    ) {
+        int estimatedInputTokens = estimateTokens(conversation, tools);
+        int reservedOutputTokens = Math.min(
+                Math.max(0, properties.limits().maxOutputTokens()),
+                Math.max(0, route.outputTokenLimit()));
+        int configuredInputBudget = properties.limits().maxContextTokens() - reservedOutputTokens;
+        int allowedInputTokens = Math.min(configuredInputBudget, route.inputTokenLimit());
+        return allowedInputTokens > 0 && estimatedInputTokens <= allowedInputTokens;
+    }
+
+    private static int estimateTokens(List<Message> conversation, List<AgentTool> tools) {
+        int characters = conversation.stream()
+                .map(Message::getText)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(String::length)
+                .sum();
+        characters += tools.stream()
+                .map(AgentTool::callback)
+                .map(ToolCallback::getToolDefinition)
+                .map(definition -> definition.name() + definition.description() + definition.inputSchema())
+                .mapToInt(String::length)
+                .sum();
+        return Math.max(1, (int) Math.ceil(characters / 4.0));
     }
 
     private static String latestUserPrompt(List<Message> messages) {

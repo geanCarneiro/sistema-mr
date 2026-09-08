@@ -380,6 +380,110 @@ public class DocumentRepository {
         }
     }
 
+    public List<GroundingChunkMatch> searchReadyChunks(
+            String conversationId,
+            String ownerSubject,
+            List<Float> queryEmbedding
+    ) {
+        String indexedQuery = """
+                CALL db.index.vector.queryNodes($indexName, $candidateCount, $embedding)
+                YIELD node AS chunk, score
+                MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
+                      -[:POSSUI]->(file:Arquivo {status: 'READY'})-[:CONTEM]->(chunk)
+                WHERE file.deletedAt IS NULL
+                RETURN file, chunk, score
+                ORDER BY score DESC
+                LIMIT $chunkLimit
+                """;
+
+        Map<String, Object> parameters = groundingSearchParameters(
+                conversationId, ownerSubject, queryEmbedding);
+
+        try {
+            return executeChunkSearch(indexedQuery, parameters);
+        } catch (Neo4jException exception) {
+            LOGGER.warn("Busca vetorial indexada indisponível; usando similaridade exata dos chunks", exception);
+            String exactQuery = """
+                    MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
+                          -[:POSSUI]->(file:Arquivo {status: 'READY'})-[:CONTEM]->(chunk:Chunk)
+                    WHERE file.deletedAt IS NULL
+                    WITH file, chunk, vector.similarity.cosine(chunk.embedding, $embedding) AS score
+                    WHERE score >= $threshold
+                    RETURN file, chunk, score
+                    ORDER BY score DESC
+                    LIMIT $chunkLimit
+                    """;
+            return executeChunkSearch(exactQuery, parameters);
+        }
+    }
+
+    public List<GroundingChunkMatch> searchReadyChunksByText(
+            String conversationId,
+            String ownerSubject,
+            String query
+    ) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        String textQuery = """
+                MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
+                      -[:POSSUI]->(file:Arquivo)-[:CONTEM]->(chunk:Chunk)
+                WHERE file.status = 'READY'
+                  AND file.deletedAt IS NULL
+                  AND (toLower(chunk.text) CONTAINS toLower($query)
+                       OR toLower(file.originalName) CONTAINS toLower($query))
+                RETURN file, chunk, 1.0 AS score
+                ORDER BY chunk.position
+                LIMIT $chunkLimit
+                """;
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("conversationId", conversationId);
+        parameters.put("ownerSubject", ownerSubject);
+        parameters.put("query", query.strip());
+        parameters.put("chunkLimit", properties.retrievalChunkLimit());
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(textQuery, parameters).list(this::mapChunkMatch));
+        }
+    }
+
+    public List<GroundingChunkMatch> findChunksAround(
+            String conversationId,
+            String ownerSubject,
+            List<ChunkAnchor> anchors,
+            int neighborWindow
+    ) {
+        if (anchors == null || anchors.isEmpty()) {
+            return List.of();
+        }
+        String query = """
+                UNWIND $anchors AS anchor
+                MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
+                      -[:POSSUI]->(file:Arquivo)-[:CONTEM]->(chunk:Chunk)
+                WHERE file.id = anchor.fileId
+                  AND file.status = 'READY'
+                  AND file.deletedAt IS NULL
+                  AND chunk.position >= anchor.position - $neighborWindow
+                  AND chunk.position <= anchor.position + $neighborWindow
+                WITH file, chunk, max(anchor.score) AS score
+                RETURN file, chunk, score
+                ORDER BY file.id, chunk.position
+                """;
+        List<Map<String, Object>> anchorParameters = anchors.stream()
+                .map(anchor -> Map.<String, Object>of(
+                        "fileId", anchor.fileId().toString(),
+                        "position", anchor.position(),
+                        "score", anchor.score()))
+                .toList();
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("conversationId", conversationId);
+        parameters.put("ownerSubject", ownerSubject);
+        parameters.put("anchors", anchorParameters);
+        parameters.put("neighborWindow", Math.max(0, neighborWindow));
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(query, parameters).list(this::mapChunkMatch));
+        }
+    }
+
     public void deleteOwned(UUID id, String conversationId, String ownerSubject) {
         String query = """
                 MATCH (:ContextoChat {id: $conversationId, ownerSubject: $ownerSubject})
@@ -427,6 +531,39 @@ public class DocumentRepository {
         }
     }
 
+    private List<GroundingChunkMatch> executeChunkSearch(String query, Map<String, Object> parameters) {
+        try (var session = driver.session()) {
+            return session.executeRead(transaction -> transaction.run(query, parameters).list(this::mapChunkMatch));
+        }
+    }
+
+    private Map<String, Object> groundingSearchParameters(
+            String conversationId,
+            String ownerSubject,
+            List<Float> queryEmbedding
+    ) {
+        return Map.of(
+                "indexName", vectorIndexName,
+                "candidateCount", properties.retrievalCandidates(),
+                "embedding", queryEmbedding,
+                "conversationId", conversationId,
+                "ownerSubject", ownerSubject,
+                "threshold", properties.similarityThreshold(),
+                "chunkLimit", properties.retrievalChunkLimit()
+        );
+    }
+
+    private GroundingChunkMatch mapChunkMatch(Record record) {
+        Map<String, Object> chunk = record.get("chunk").asMap();
+        return new GroundingChunkMatch(
+                mapFile(record, "file"),
+                UUID.fromString(string(chunk, "id")),
+                number(chunk, "position").intValue(),
+                string(chunk, "text"),
+                record.get("score").asDouble()
+        );
+    }
+
     private static ChatFile mapFile(Record record, String alias) {
         Map<String, Object> values = record.get(alias).asMap();
         return new ChatFile(
@@ -471,4 +608,14 @@ public class DocumentRepository {
     }
 
     public record GroundingMatch(ChatFile file, double score) {}
+
+    public record GroundingChunkMatch(
+            ChatFile file,
+            UUID chunkId,
+            int position,
+            String text,
+            double score
+    ) {}
+
+    public record ChunkAnchor(UUID fileId, int position, double score) {}
 }

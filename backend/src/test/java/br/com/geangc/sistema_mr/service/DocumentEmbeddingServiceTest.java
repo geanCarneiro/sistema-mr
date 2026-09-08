@@ -2,6 +2,7 @@ package br.com.geangc.sistema_mr.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +34,24 @@ class DocumentEmbeddingServiceTest {
         org.mockito.Mockito.verify(provider, org.mockito.Mockito.times(2))
                 .embed(org.mockito.ArgumentMatchers.argThat(texts -> texts.stream().allMatch(text ->
                         text.startsWith("passage: ") || text.startsWith("query: "))));
+    }
+
+    @Test
+    void repeatsStructuralHeadingOnChunksCreatedInsideTheSameSection() {
+        DocumentEmbeddingProvider provider = mock(DocumentEmbeddingProvider.class);
+        when(provider.embed(org.mockito.ArgumentMatchers.anyList()))
+                .thenAnswer(invocation -> invocation.<List<String>>getArgument(0).stream()
+                        .map(ignored -> new float[384]).toList());
+        DocumentProperties properties = new DocumentProperties(
+                Path.of("data/files"), 10, 20 * 1024 * 1024, 12, 100, 20,
+                "multilingual-e5-small", 384, 100, 3, .6, 200_000,
+                new DocumentProperties.Ocr("http://127.0.0.1:8082", 120, 12, .55));
+        DocumentEmbeddingService service = new DocumentEmbeddingService(provider, properties);
+
+        var chunks = service.embedChunks("## Página 7\n\n" + "texto importante ".repeat(40));
+
+        assertTrue(chunks.size() > 1);
+        assertTrue(chunks.stream().allMatch(chunk -> chunk.text().startsWith("## Página 7")));
     }
 
     private static DocumentProperties properties() {

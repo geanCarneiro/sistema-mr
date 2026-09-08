@@ -84,4 +84,20 @@ class ChatApplicationServiceTest {
                 eq(List.of())
         );
     }
+
+    @Test
+    void translatesContextFailuresToNaturalLanguage() {
+        assertEquals(
+                GroundingContextLimitException.USER_MESSAGE,
+                ChatApplicationService.safeMessage(new IllegalStateException("RUN_CONTEXT_LIMIT_EXCEEDED"))
+        );
+        assertEquals(
+                GroundingContextLimitException.USER_MESSAGE,
+                ChatApplicationService.safeMessage(new GroundingContextLimitException("technical reason"))
+        );
+        assertEquals(
+                GroundingEvidenceInsufficientException.USER_MESSAGE,
+                ChatApplicationService.safeMessage(new GroundingEvidenceInsufficientException("no evidence"))
+        );
+    }
 }

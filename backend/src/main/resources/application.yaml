@@ -121,6 +121,11 @@ app:
     embedding-service-url: ${DOCUMENT_EMBEDDING_SERVICE_URL:http://127.0.0.1:8083}
     retrieval-candidates: 100
     retrieval-file-limit: 3
+    retrieval-chunk-limit: 12
+    retrieval-neighbor-window: 1
+    retrieval-full-context-max-tokens: 12000
+    context-response-reserve-tokens: 8192
+    context-tool-reserve-tokens: 4096
     similarity-threshold: 0.60
     context-token-budget: 200000
     ocr:

@@ -382,8 +382,15 @@ public class ChatApplicationService {
         return "Estou entendendo o contexto da sua mensagem…";
     }
 
-    private static String safeMessage(RuntimeException exception) {
+    static String safeMessage(RuntimeException exception) {
         String message = exception.getMessage();
+        if ("RUN_CONTEXT_LIMIT_EXCEEDED".equals(message)
+                || exception instanceof GroundingContextLimitException) {
+            return GroundingContextLimitException.USER_MESSAGE;
+        }
+        if (exception instanceof GroundingEvidenceInsufficientException) {
+            return GroundingEvidenceInsufficientException.USER_MESSAGE;
+        }
         return message == null || message.isBlank()
                 ? "Não foi possível concluir esta execução."
                 : message;

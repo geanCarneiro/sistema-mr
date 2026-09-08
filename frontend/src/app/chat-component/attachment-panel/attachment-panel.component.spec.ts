@@ -74,6 +74,12 @@ describe('AttachmentPanelComponent', () => {
     ).not.toBeNull();
   });
 
+  it('formats file sizes with Brazilian separators and adaptive units', () => {
+    expect(component.tamanhoFormatado(9_554_415)).toBe('9,1 MB');
+    expect(component.tamanhoFormatado(9_554_415 / 1024)).toBe('9,1 KB');
+    expect(component.tamanhoFormatado(1_234_567_890)).toBe('1,1 GB');
+  });
+
   it('emits a privacy review request for documents that need review', () => {
     const review = file('review', 'NEEDS_REVIEW');
     review.errorMessage = 'OCR local insuficiente';
